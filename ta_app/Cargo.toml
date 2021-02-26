@@ -7,3 +7,10 @@ edition = "2018"
 [dependencies]
 optee-common = { version = "0.1.0", path = "../optee-common" }
 log = "0.4"
+
+#crypto
+schnorrkel = { version = "0.9.2", features = ["getrandom", "u64_backend"], default-features = false }
+rand_core = { version = "0.6.2", features = ["getrandom"], default-features = false } #must much schnorrkel
+
+[dev-dependencies]
+getrandom = { version = "0.2", features = ["std"] }

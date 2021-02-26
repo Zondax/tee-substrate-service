@@ -1,10 +1,8 @@
 [workspace]
-members = ["host", "ta"]
-
+members = ["host", "ta", "ta_app", "host_app", "zkms-common"]
 
 exclude = [
         "c_ta", "c_host", #C binaries
-        "ta_app", "host_app", "zkms-common" #crates that are deps only
         ]
 
 resolver = "2"

@@ -8,6 +8,5 @@ readme = "README.md"
 version = "0.1.0"
 
 [dependencies]
-rand = "0.7.3"
 zkms-common = { version = "0.1.0", path = "../zkms-common" }
 log = "0.4"

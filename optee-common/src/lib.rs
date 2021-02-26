@@ -7,14 +7,27 @@ pub use tee_error::{TeeError, TeeErrorCode};
 #[derive(Debug, Copy, Clone)]
 #[repr(u32)]
 pub enum CommandId {
-    Unknown,
+    GenerateNew,
+    GetKeys,
+    SignMessage,
 }
 
-impl From<u32> for CommandId {
-    fn from(cmd: u32) -> Self {
+impl core::convert::TryFrom<u32> for CommandId {
+    type Error = ();
+
+    fn try_from(cmd: u32) -> Result<Self, ()> {
         match cmd {
-            _ => CommandId::Unknown,
+            0 => Ok(CommandId::GenerateNew),
+            1 => Ok(CommandId::GetKeys),
+            2 => Ok(CommandId::SignMessage),
+            _ => Err(()),
         }
+    }
+}
+
+impl Into<u32> for CommandId {
+    fn into(self) -> u32 {
+        self as _
     }
 }
 

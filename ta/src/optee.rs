@@ -1,5 +1,7 @@
 use ta_app::{close_session, open_session};
-use zondee_utee::wrapper::{TEELogger, TaErrorCode as Error};
+use zondee_utee::wrapper::{optee_getrandom, TEELogger, TaErrorCode as Error};
+
+getrandom::register_custom_getrandom!(optee_getrandom);
 
 #[no_mangle]
 pub extern "C" fn TA_CreateEntryPoint() -> u32 {

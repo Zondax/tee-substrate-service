@@ -13,6 +13,7 @@ mod optee;
 #[macro_use]
 extern crate log;
 
+use core::convert::TryFrom;
 #[cfg(not(test))]
 use core::panic::PanicInfo;
 
@@ -60,7 +61,10 @@ pub extern "C" fn invoke_command(
             .expect("this is safe, the type was previously check")
     };
 
-    let cmd = CommandId::from(cmd_id);
+    let cmd = match CommandId::try_from(cmd_id) {
+        Ok(cmd) => cmd,
+        Err(_) => return Error::NotSupported as _,
+    };
 
     // The inner handler could have persistance data or state that is required along the execution of the program
     // so instead of creating a handler on every command_invocation, we create the handler when the session is opened.

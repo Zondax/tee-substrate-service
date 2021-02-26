@@ -4,6 +4,7 @@ name = "rustee_host"
 version = "0.1.0"
 edition = "2018"
 readme = "README.md"
+resolver = "2"
 
 [lib]
 name = "rustee_host"
@@ -20,3 +21,4 @@ zkms-common = { version = "0.1.0",  path = "../zkms-common" }
 host-app = { version = "0.1.0", path = "../host_app" }
 optee-common = { version = "0.1.0", path = "../optee-common" }
 zondee-teec = { version = "0.1.0", git = "https://github.com/Zondax/hello-rustee", branch = "simple_tee_0.3.12"  }
+schnorrkel = { version = "0.9.2", features = ["u64_backend"], default-features = false }

@@ -1,3 +1,5 @@
+use schnorrkel::{keys::PublicKey, sign::Signature};
+
 /// Request handler interface
 pub trait HandleRequest: Send + Sync {
     /// process a request
@@ -5,8 +7,18 @@ pub trait HandleRequest: Send + Sync {
     fn process_request(&self, request: RequestMethod) -> Result<RequestResponse, String>;
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Debug, Clone)]
-pub enum RequestMethod {}
+#[cfg_attr(feature = "serde", derive(serde_::Deserialize, serde_::Serialize))]
+#[derive(Debug, Clone)]
+pub enum RequestMethod {
+    GenerateNew { seed: Option<String> },
+    GetPublicKeys,
+    SignMessage { public_key: PublicKey, msg: Vec<u8> },
+}
 
-#[derive(serde::Deserialize, serde::Serialize, Debug)]
-pub enum RequestResponse {}
+#[cfg_attr(feature = "serde", derive(serde_::Deserialize, serde_::Serialize))]
+#[derive(Debug)]
+pub enum RequestResponse {
+    GenerateNew { public_key: PublicKey },
+    GetPublicKeys { keys: Vec<PublicKey> },
+    SignMessage { signature: Signature },
+}

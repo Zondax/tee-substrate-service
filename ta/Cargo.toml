@@ -4,6 +4,7 @@ name = "rustee_ta"
 version = "0.1.0"
 edition = "2018"
 readme = "README.md"
+resolver = "2"
 
 [lib]
 name = "rustee_ta"
@@ -11,25 +12,14 @@ crate-type = ["staticlib"]
 
 [dependencies]
 optee-common = { version = "0.1.0", path = "../optee-common" }
-zondee-utee = { version = "0.1.0", git = "https://github.com/Zondax/hello-rustee", branch = "simple_tee_0.3.12" }
+zondee-utee = { version = "0.1.0", features = ["getrandom"], git = "https://github.com/Zondax/hello-rustee", branch = "simple_tee_0.3.12" }
 arrayvec = { version = "0.5.2", default-features = false }
 ta-app = { version = "0.1.0", path = "../ta_app" }
 log = "0.4"
+getrandom = { version = "0.2.2", features = ["custom"] }
 
 [target.armv7-unknown-linux-gnueabihf.dev-dependencies]
 panic-halt = "0.2.0"
 
-[dependencies.rand]
-version = "0.7.3"
-default-features = false
-features = ["getrandom"]
-
-[dependencies.rand_core]
-version = "0.5.1"
-default-features = false
-
-[dev-dependencies.log]
-version = "0.4.11"
-
-[dev-dependencies.simple_logger]
-version = "1.11.0"
+[dev-dependencies]
+simple_logger = "1.11"

@@ -3,6 +3,7 @@
 //! This Handler is implemented here because this module has access to private functions that
 //! do the weight lifting of performing invocations to OPTEE through the TEEC api, which is unsafe
 //! Also by doing this the host client doesnt need to depend on obscure OPTEE bindings
+use schnorrkel::{keys::PublicKey, sign::Signature};
 use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
 
 use optee_common::CommandId;
@@ -19,8 +20,52 @@ impl HandleRequest for Handler {
         //convert items from RequestMethod
         // to something that optee_common understands
         // and `invoke_command`
-        //
-        //invoke_command(CommandId::Mul as _, &mut op).map_err(|e| e.to_string())?;
-        todo!()
+        match request {
+            RequestMethod::GenerateNew { seed } => {
+                //convert seed to &str, pass the slice in bytes with prepended len
+                // public key (output) is 32 bytes
+
+                let mut out = [0u8; 32];
+
+                let vec = match seed {
+                    None => vec![0],
+                    Some(seed) => {
+                        let len = seed.len();
+
+                        let mut vec = vec![0; 8 + len];
+                        vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
+                        vec[8..].copy_from_slice(seed.as_bytes());
+
+                        vec
+                    }
+                };
+                let p0 = ParamTmpRef::new_input(&vec);
+
+                let p1 = ParamTmpRef::new_output(&mut out[..]);
+
+                let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
+
+                invoke_command(CommandId::GenerateNew.into(), &mut op)
+                    .map_err(|e| e.to_string())?;
+                let out = PublicKey::from_bytes(&out[..]).map_err(|e| e.to_string())?;
+
+                Ok(RequestResponse::GenerateNew { public_key: out })
+            }
+            RequestMethod::GetPublicKeys => {
+                //ok this prepare just the command id basically
+                // but for the return we might need something else since we can't pass N keys back
+                // because we need to preallocate the out buffer...
+                // UNLESS we can share memory then we can allocate the memory in the TA
+                // pass the pointer in the out slice
+                // reinterpret it and extract the keys from there...
+                todo!()
+            }
+            RequestMethod::SignMessage { public_key, msg } => {
+                //the key is fixed lenght, so just dump it,
+                // the msg prepent length before
+                // signature (output) is 64 bytes
+                todo!()
+            }
+        }
     }
 }

@@ -4,10 +4,9 @@
     unused_lifetimes,
     unused_qualifications
 )]
-use rand::Rng;
 use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
 
-pub fn start_service(_handler: impl HandleRequest + 'static) {
+pub fn start_service(handler: impl HandleRequest + 'static) {
     //nothing yet
 
     //ref to https://github.com/gnunicorn/substrate-remote-signer-example
@@ -16,5 +15,6 @@ pub fn start_service(_handler: impl HandleRequest + 'static) {
     //initialize listener to retrieve requests from
     // for each request transaform and pass to `handler`
     // process response and reply
-    todo!()
+    let resp = handler.process_request(RequestMethod::GenerateNew { seed: None });
+    println!("{:?}", resp);
 }

@@ -3,12 +3,15 @@
 use core::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{CommandId, HandleTaCommand, TeeErrorCode as Error};
+use schnorrkel::keys::{Keypair, PUBLIC_KEY_LENGTH};
 
 #[macro_use]
 extern crate log;
 
 #[derive(Default)]
-pub struct TaApp {}
+pub struct TaApp {
+    keys: [Option<Keypair>; 1], //we'll have to figure later how to expand this
+}
 
 // This is safe because all request are serialized by the TA framework
 unsafe impl Sync for TaApp {}
@@ -32,14 +35,48 @@ impl HandleTaCommand for TaApp {
         mut input: &[u8],
         output: &mut [u8],
     ) -> Result<(), Error> {
-        todo!()
+        trace!("Processing CMD {:?}", cmd_id);
+
+        Self::check_mem(cmd_id, input, &output)?;
+
+        match cmd_id {
+            CommandId::GenerateNew => {
+                let seed_len = Self::read_and_advance_u64(&mut input)? as _;
+                match seed_len {
+                    0 => {
+                        let keypair = Keypair::generate();
+                        let pk_bytes = keypair.public.to_bytes();
+
+                        //store keypair
+                        self.keys[0].replace(keypair);
+
+                        //write to output
+                        output[..PUBLIC_KEY_LENGTH].copy_from_slice(&pk_bytes[..]);
+                    }
+                    len => {
+                        let seed =
+                            core::str::from_utf8(&input[..len]).map_err(|_| Error::BadFormat)?;
+
+                        todo!("private key with seed")
+                    }
+                }
+
+                Ok(())
+            }
+            CommandId::GetKeys => {
+                todo!()
+            }
+            CommandId::SignMessage => {
+                todo!()
+            }
+        }
     }
 }
 
 const U64_SIZE: usize = core::mem::size_of::<u64>();
 impl TaApp {
     ///Reads an u64 from the slice, advancing it
-    fn read_and_advance_u64(&self, slice: &mut &[u8]) -> Result<u64, Error> {
+    fn read_and_advance_u64(slice: &mut &[u8]) -> Result<u64, Error> {
         if slice.len() < U64_SIZE {
             return Err(Error::OutOfMemory);
         }
@@ -53,9 +90,26 @@ impl TaApp {
     }
 
     ///Makes sure the input and output slice have enough length
-    const fn check_mem(cmd: CommandId, in_len: usize, out_len: usize) -> Result<(), Error> {
+    fn check_mem(cmd: CommandId, mut input: &[u8], mut out: &[u8]) -> Result<(), Error> {
         match cmd {
-            CommandId::Unknown => Err(Error::NotSupported),
+            CommandId::GenerateNew => {
+                let len = Self::read_and_advance_u64(&mut input)?;
+
+                let input = input.len() >= len as _;
+                let out = out.len() >= PUBLIC_KEY_LENGTH;
+
+                if input && out {
+                    Ok(())
+                } else {
+                    Err(Error::OutOfMemory)
+                }
+            }
+            CommandId::GetKeys => {
+                todo!()
+            }
+            CommandId::SignMessage => {
+                todo!()
+            }
         }
     }
 }
@@ -84,5 +138,20 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
 
 #[cfg(test)]
 mod tests {
+    extern crate std;
     use super::*;
+
+    #[test]
+    fn get_random_key() {
+        let mut app = TaApp::default();
+
+        let input = 0u64.to_le_bytes();
+        let mut output = [0; PUBLIC_KEY_LENGTH];
+
+        app.process_command(CommandId::GenerateNew, &input[..], &mut output)
+            .expect("shouldn't fail");
+
+        let valid_pk = schnorrkel::PublicKey::from_bytes(&output).expect("not a valid public key");
+        std::dbg!(valid_pk);
+    }
 }
