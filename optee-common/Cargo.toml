@@ -1,0 +1,12 @@
+[package]
+name = "optee-common"
+version = "0.1.0"
+authors = ["Zondax GmbH <info@zondax.ch>"]
+edition = "2018"
+
+[lib]
+name = "optee_common"
+crate-type = ["rlib"]
+
+[dependencies]
+

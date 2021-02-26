@@ -1,0 +1,9 @@
+[package]
+name = "ta-app"
+version = "0.1.0"
+authors = ["becominginsane <francesco@zondax.ch>"]
+edition = "2018"
+
+[dependencies]
+optee-common = { version = "0.1.0", path = "../optee-common" }
+log = "0.4"

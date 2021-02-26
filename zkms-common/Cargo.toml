@@ -1,0 +1,13 @@
+[package]
+name = "zkms-common"
+authors = ["Zondax GmbH <info@zondax.ch>"]
+description = "Common definitions for zkms-client and zkms-server"
+edition = "2018"
+license = "Apache-2.0"
+readme = "README.md"
+version = "0.1.0" 
+
+[dependencies]
+serde = { version = "1.0.115", features = ["derive"] }
+
+[build-dependencies]

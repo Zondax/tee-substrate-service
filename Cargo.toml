@@ -1,0 +1,20 @@
+[workspace]
+members = ["host", "ta"]
+
+
+exclude = [
+        "c_ta", "c_host", #C binaries
+        "ta_app", "host_app", "zkms-common" #crates that are deps only
+        ]
+
+resolver = "2"
+
+[profile.release]
+lto = true
+codegen-units = 1
+debug = true
+opt-level = "z"
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

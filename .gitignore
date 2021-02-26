@@ -1,0 +1,13 @@
+/.idea
+/target
+.cargo/registry
+.cargo/.package-cache
+c_ta/8d22f026-eb0a-4401-b575-5cf59327119b.*
+c_ta/*.cmd
+c_ta/*.d
+c_ta/*.o
+c_ta/*.lds
+c_ta/dyn_list
+c_host/*.o
+c_host/remotee_signer
+Cargo.lock

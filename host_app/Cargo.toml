@@ -1,0 +1,13 @@
+[package]
+name = "host-app"
+authors = ["Zondax GmbH <info@zondax.ch>"]
+description = "Provides useful CLI commands to manage zkms servers"
+edition = "2018"
+license = "Apache-2.0"
+readme = "README.md"
+version = "0.1.0"
+
+[dependencies]
+rand = "0.7.3"
+zkms-common = { version = "0.1.0", path = "../zkms-common" }
+log = "0.4"
