@@ -11,6 +11,8 @@ rand_core = "0.6"
 
 #crypto
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
+merlin = { version = "3", default-features = false }
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["std"] }
+rand = "0.8"

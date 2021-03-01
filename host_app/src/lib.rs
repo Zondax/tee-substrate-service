@@ -15,6 +15,21 @@ pub fn start_service(handler: impl HandleRequest + 'static) {
     //initialize listener to retrieve requests from
     // for each request transaform and pass to `handler`
     // process response and reply
-    let resp = handler.process_request(RequestMethod::GenerateNew { seed: None });
+    let resp = handler
+        .process_request(RequestMethod::GenerateNew { seed: None })
+        .unwrap();
     println!("{:?}", resp);
+
+    let key = match resp {
+        RequestResponse::GenerateNew { public_key } => public_key,
+        _ => panic!("not the response we expected!"),
+    };
+
+    let sign = handler
+        .process_request(RequestMethod::SignMessage {
+            public_key: key,
+            msg: b"francesco@zondax.ch".to_vec(),
+        })
+        .unwrap();
+    println!("{:?}", sign);
 }

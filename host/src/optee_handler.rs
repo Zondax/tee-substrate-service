@@ -5,7 +5,7 @@
 //! Also by doing this the host client doesnt need to depend on obscure OPTEE bindings
 use schnorrkel::{
     keys::{PublicKey, PUBLIC_KEY_LENGTH},
-    sign::Signature,
+    sign::{Signature, SIGNATURE_LENGTH},
 };
 use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
 
@@ -58,16 +58,37 @@ impl HandleRequest for Handler {
                 //ok this prepare just the command id basically
                 // but for the return we might need something else since we can't pass N keys back
                 // because we need to preallocate the out buffer...
-                // UNLESS we can share memory then we can allocate the memory in the TA
+                // UNLESS we can share memory then we can _allocate the memory in the TA_ (what am I thinking?)
                 // pass the pointer in the out slice
                 // reinterpret it and extract the keys from there...
+                // ig we can make 2 request? 1 to retrieve number of public keys
+                // and the other one to actually get the data
                 todo!()
             }
             RequestMethod::SignMessage { public_key, msg } => {
                 //the key is fixed lenght, so just dump it,
                 // the msg prepent length before
                 // signature (output) is 64 bytes
-                todo!()
+                let mut out = [0; SIGNATURE_LENGTH];
+
+                let vec = {
+                    let mut vec = Vec::with_capacity(PUBLIC_KEY_LENGTH + 8 + msg.len());
+                    vec.extend_from_slice(&public_key.to_bytes()[..]);
+                    vec.extend_from_slice(&msg.len().to_le_bytes()[..]);
+                    vec.extend_from_slice(&msg);
+                    vec
+                };
+                let p0 = ParamTmpRef::new_input(&vec);
+
+                let p1 = ParamTmpRef::new_output(&mut out[..]);
+
+                let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
+
+                invoke_command(CommandId::SignMessage.into(), &mut op)
+                    .map_err(|e| e.to_string())?;
+                let out = Signature::from_bytes(&out[..]).map_err(|e| e.to_string())?;
+
+                Ok(RequestResponse::SignMessage { signature: out })
             }
         }
     }
