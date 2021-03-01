@@ -3,7 +3,10 @@
 //! This Handler is implemented here because this module has access to private functions that
 //! do the weight lifting of performing invocations to OPTEE through the TEEC api, which is unsafe
 //! Also by doing this the host client doesnt need to depend on obscure OPTEE bindings
-use schnorrkel::{keys::PublicKey, sign::Signature};
+use schnorrkel::{
+    keys::{PublicKey, PUBLIC_KEY_LENGTH},
+    sign::Signature,
+};
 use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
 
 use optee_common::CommandId;
@@ -22,13 +25,13 @@ impl HandleRequest for Handler {
         // and `invoke_command`
         match request {
             RequestMethod::GenerateNew { seed } => {
-                //convert seed to &str, pass the slice in bytes with prepended len
+                //convert seed to &str, pass the slice in bytes with prepended len (u64)
                 // public key (output) is 32 bytes
 
-                let mut out = [0u8; 32];
+                let mut out = [0u8; PUBLIC_KEY_LENGTH];
 
                 let vec = match seed {
-                    None => vec![0],
+                    None => 0u64.to_le_bytes().to_vec(),
                     Some(seed) => {
                         let len = seed.len();
 
