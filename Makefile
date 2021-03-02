@@ -1,4 +1,4 @@
-.PHONY: all clean
+.PHONY: all clean copy cclean run run-debug deps
 default: all
 
 include proj.mk
@@ -38,7 +38,7 @@ export TEEC_ROOT=$(TEEC_EXPORT)/usr
 deps:
 	rustup target add $(RUST_TARGET)
 
-all:
+all: cclean
 	cargo build --target $(RUST_TARGET) --release
 	$(MAKE) -C $(C_HOST) CROSS_COMPILE="$(HOST_CROSS_COMPILE)" --no-builtin-variables
 	$(MAKE) -C $(C_TA) CROSS_COMPILE="$(TA_CROSS_COMPILE)" LDFLAGS=""
@@ -49,7 +49,7 @@ copy: all
 	cp $(C_TA)/$(TA_UUID).ta $(SHARED_FOLDER)
 
 clean:
-	CARGO_HOME=$(CARGO_CUSTOM_HOME) && cargo clean
+	cargo clean
 	$(MAKE) -C $(C_HOST) clean
 	$(MAKE) -C $(C_TA) clean
 	rm $(SHARED_FOLDER)/$(PROJ_NAME) $(SHARED_FOLDER)/$(TA_UUID).ta

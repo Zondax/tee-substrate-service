@@ -1,3 +1,5 @@
+.PHONY: clean new-uuid
+
 include include/uuid.mk
 
 BINARY=$(TA_UUID)

@@ -45,14 +45,18 @@ impl<'r> HandleTaCommand for TaApp<'r> {
         trace!("Processing CMD {:?}", cmd_id);
 
         Self::check_mem(cmd_id, input, &output)?;
+        trace!("checked mem succesfully...");
 
         match cmd_id {
             CommandId::GenerateNew => {
                 let seed_len = util::read_and_advance_u64(&mut input)? as _;
+                trace!("read seed_len={:?}", seed_len);
+
                 match seed_len {
                     0 => {
                         let keypair = Keypair::generate_with(&mut self.rng);
                         let pk_bytes = keypair.public.to_bytes();
+                        trace!("generated keypair; public={:x?}", pk_bytes);
 
                         //store keypair
                         self.keys[0].replace(keypair);
@@ -76,18 +80,23 @@ impl<'r> HandleTaCommand for TaApp<'r> {
             CommandId::SignMessage => {
                 let public = util::read_and_advance(&mut input, PUBLIC_KEY_LENGTH)?;
                 let public = PublicKey::from_bytes(&public).map_err(|_| Error::BadFormat)?;
+                trace!("read public key: {:x?}", public.to_bytes());
 
                 let msg_len = util::read_and_advance_u64(&mut input)? as _;
                 let msg = &input[..msg_len];
+                trace!("read msg: {:x?}", msg);
 
                 let secret = self
                     .find_associated_key(public)
                     .ok_or(Error::BadParameters)?;
+                trace!("got key");
 
                 let sig = self.sign(&secret, b"zondax", &msg, &public);
                 let sig = sig.to_bytes();
+                trace!("signed!");
 
                 output[..SIGNATURE_LENGTH].copy_from_slice(&sig[..]);
+                trace!("signature copied to out");
 
                 Ok(())
             }

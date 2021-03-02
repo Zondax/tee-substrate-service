@@ -28,6 +28,7 @@ pub fn read_and_advance<'s>(slice: &mut &'s [u8], amt: usize) -> Result<&'s [u8]
     }
 
     let out = &slice[..amt];
+    trace!("read {} bytes: {:?}", amt, out);
     *slice = &slice[amt..];
 
     Ok(out)

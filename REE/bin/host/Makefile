@@ -37,5 +37,4 @@ $(PROJ_NAME): $(OBJECT_FILES)
 	$(CC) -o $@ $(OBJECT_FILES) $(LDLIBS)
 
 clean:
-	rm -f $(BIN_NAME) $(OBJECT_FILES)
-
+	rm -f $(PROJ_NAME) $(OBJECT_FILES)
