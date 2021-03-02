@@ -1,3 +1,8 @@
+//! This crate glues a bunch of stuff together
+//!
+//! It starts the chosen service (dependency and code) and feeds it to the logic in `host_app`, aswell as the
+//! default handler for the requests
+
 #![no_builtins]
 
 mod optee_handler;
@@ -25,7 +30,18 @@ pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
 
 #[no_mangle]
 pub extern "C" fn run() -> u32 {
-    // Calls he host client service passing the handler that should be used for requests
-    host_app::start_service(optee_handler::Handler::default());
-    0
+    //create tokio runtime for the application
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .enable_io()
+        .build()
+        .expect("unable to initialize tokio runtime");
+
+    rt.block_on(async move {
+        //start the service
+        let service = host_jsonrpc::start_service("127.0.0.1:39946").await;
+
+        //call the host service that retrieves requests and handles them with the appropriate handler
+        host_app::start_service(service, optee_handler::Handler::default());
+        0
+    })
 }

@@ -1,4 +1,7 @@
-//! Common definitions
+//! Common definitions between host and outside world
+//!
+//! This crate is most likely gonna be used only by implementations of the protocol and by `host`
+
 #![deny(
     clippy::expect_used,
     //missing_debug_implementations,
@@ -8,5 +11,7 @@
     unused_lifetimes
 )]
 
-pub mod jsonrpc_request;
-pub use jsonrpc_request::{HandleRequest, RequestMethod, RequestResponse};
+pub mod protocol;
+pub use protocol::{HandleRequest, RequestMethod, RequestResponse};
+
+pub use schnorrkel;

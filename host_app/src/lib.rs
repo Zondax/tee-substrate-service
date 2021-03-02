@@ -1,35 +1,46 @@
+//! This crate contains the glue to drive a `host-common::REEService` and feed
+//! the request into a `zkms-common::HandleRequest``
+//!
+//! It effectively allows dependency injection, both from the service and the request handler
+
 #![deny(
     rust_2018_idioms,
     trivial_casts,
     unused_lifetimes,
     unused_qualifications
 )]
-use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
 
-pub fn start_service(handler: impl HandleRequest + 'static) {
-    //nothing yet
+#[macro_use]
+extern crate log;
 
-    //ref to https://github.com/gnunicorn/substrate-remote-signer-example
-    // this app should talk to the substrate node, aswell as handle the requests sent to it
+use futures::stream::StreamExt;
+use host_common::REEService;
+use zkms_common::HandleRequest;
 
-    //initialize listener to retrieve requests from
-    // for each request transaform and pass to `handler`
-    // process response and reply
-    let resp = handler
-        .process_request(RequestMethod::GenerateNew { seed: None })
-        .unwrap();
-    println!("{:?}", resp);
+pub async fn start_service(
+    service: impl REEService<ServiceError = String> + 'static,
+    handler: impl HandleRequest + 'static,
+) {
+    futures::pin_mut!(service);
+    //retrieve next request from service
+    // whilst we could go concurrent it would be useless as the handler is still blocking
+    while let Some(item) = service.next().await {
+        match item {
+            Err(e) => error!("failed to retrieve next item from service: {:?}", e),
+            Ok(request) => {
+                //pass request to handler
+                let response = handler
+                    .process_request(request.method.clone())
+                    .map_err(|s| format!("Error processing request: {}", s));
 
-    let key = match resp {
-        RequestResponse::GenerateNew { public_key } => public_key,
-        _ => panic!("not the response we expected!"),
-    };
+                debug!(
+                    "processed request={:?}; response={:?}",
+                    request.method, response
+                );
 
-    let sign = handler
-        .process_request(RequestMethod::SignMessage {
-            public_key: key,
-            msg: b"francesco@zondax.ch".to_vec(),
-        })
-        .unwrap();
-    println!("{:?}", sign);
+                //reply to request
+                request.reply(response).await
+            }
+        }
+    }
 }

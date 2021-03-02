@@ -8,10 +8,10 @@ readme = "README.md"
 version = "0.1.0" 
 
 [features]
-serde = ["serde_", "schnorrkel/serde"]
+serde_ = ["serde", "schnorrkel/serde"]
 
 [dependencies]
-serde_ = { version = "1.0.115", features = ["derive"], package = "serde", optional = true }
-schnorrkel = { version = "0.9.2", features = ["u64_backend"], default-features = false }
+serde = { version = "1.0.123", features = ["derive"], optional = true }
+schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 
 [build-dependencies]

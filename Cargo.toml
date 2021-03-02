@@ -1,5 +1,7 @@
 [workspace]
-members = ["host", "ta", "ta_app", "host_app", "zkms-common"]
+members = ["host", "ta", "ta_app", "host_app",
+        "zkms-common", "jsonrpc/zkms",
+        "host-common", "jsonrpc/host"]
 
 exclude = [
         "c_ta", "c_host", #C binaries
