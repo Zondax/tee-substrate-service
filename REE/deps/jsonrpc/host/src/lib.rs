@@ -2,7 +2,7 @@
 
 use std::net::ToSocketAddrs;
 
-use futures::stream::Stream;
+use futures::stream::{Stream, StreamExt};
 use jsonrpc_http_server::jsonrpc_core::{BoxFuture, IoHandler, Result};
 
 use host_common::{
@@ -15,7 +15,7 @@ use zkms_jsonrpc::ZKMS;
 /// Will start the JSON-RPC service as configured and return a list of incoming service requests
 pub async fn start_service<E: Send + std::fmt::Debug + 'static>(
     addr: impl ToSocketAddrs,
-) -> impl Stream<Item = ServiceRequest<E>> {
+) -> impl Stream<Item = std::result::Result<ServiceRequest<E>, E>> {
     //get iohandler for jsonrcp
     let mut io = IoHandler::new();
 
@@ -36,7 +36,7 @@ pub async fn start_service<E: Send + std::fmt::Debug + 'static>(
         server.wait();
     });
 
-    rx.into_stream()
+    rx.into_stream().then(|req| async move { Ok(req) })
 }
 
 struct RpcHandler<E> {

@@ -41,7 +41,7 @@ pub extern "C" fn run() -> u32 {
         let service = host_jsonrpc::start_service("127.0.0.1:39946").await;
 
         //call the host service that retrieves requests and handles them with the appropriate handler
-        host_app::start_service(service, optee_handler::Handler::default());
+        host_app::start_service(service, optee_handler::Handler::default()).await;
         0
     })
 }

@@ -9,7 +9,6 @@ extern crate log;
 
 use flume::Sender;
 use futures::stream::Stream;
-use std::error::Error as StdError;
 
 pub use flume;
 pub use zkms_common::{self, RequestMethod, RequestResponse};
@@ -32,7 +31,14 @@ pub trait REEService
 where
     Self: Stream<Item = Result<ServiceRequest<Self::ServiceError>, Self::ServiceError>>,
 {
-    type ServiceError: StdError;
+    type ServiceError;
+}
+
+impl<S, E> REEService for S
+where
+    S: Stream<Item = Result<ServiceRequest<E>, E>>,
+{
+    type ServiceError = E;
 }
 
 impl<E> ServiceRequest<E> {
