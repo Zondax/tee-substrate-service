@@ -8,8 +8,8 @@ OBJCOPY ?= $(CROSS_COMPILE)objcopy
 OBJDUMP ?= $(CROSS_COMPILE)objdump
 READELF ?= $(CROSS_COMPILE)readelf
 
-CFLAGS 	+= -Wall -I../$(C_TA)/include -I$(TEEC_EXPORT)/usr/include -I./include -fPIC
-CFLAGS 	+= -I../$(RUST_HOST)/include
+CFLAGS 	+= -Wall -I$(TA_INCLUDE) -I$(TEEC_EXPORT)/usr/include -I./include -fPIC
+CFLAGS 	+= -I../../lib/host/include
 
 LDFLAGS += --hash-style=gnu
 LDLIBS 	+= -lteec -L$(TEEC_EXPORT)/lib
@@ -19,8 +19,8 @@ LDLIBS 	+= -lm
 LDLIBS 	+= -ldl
 
 # Add both search paths
-LDLIBS 	+= -L../target/armv7-unknown-linux-gnueabihf/release
-LDLIBS 	+= -L../target/aarch64-unknown-linux-gnu/release
+LDLIBS 	+= -L../../target/armv7-unknown-linux-gnueabihf/release
+LDLIBS 	+= -L../../target/aarch64-unknown-linux-gnu/release
 
 ifdef OVERRIDE_SYSROOT
 LDLIBS 	+= --sysroot=$(TEEC_EXPORT)
