@@ -5,7 +5,7 @@ authors = ["becominginsane <francesco@zondax.ch>"]
 edition = "2018"
 
 [dependencies]
-optee-common = { version = "0.1.0", path = "../optee-common" }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
 log = "0.4"
 rand_core = "0.6"
 

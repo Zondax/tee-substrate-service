@@ -8,7 +8,7 @@ readme = "README.md"
 version = "0.1.0"
 
 [dependencies]
-zkms-common = { version = "0.1.0", path = "../zkms-common" }
-host-common = { version = "0.1", path = "../host-common" }
+zkms-common = { version = "0.1.0", path = "../../deps/zkms-common" }
+host-common = { version = "0.1", path = "../../deps/host-common" }
 log = "0.4"
 futures = "0.3"

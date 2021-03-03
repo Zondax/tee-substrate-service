@@ -11,10 +11,10 @@ name = "rustee_ta"
 crate-type = ["staticlib"]
 
 [dependencies]
-optee-common = { version = "0.1.0", path = "../optee-common" }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
 zondee-utee = { version = "0.1.0", features = ["rand_core"], git = "https://github.com/Zondax/hello-rustee", branch = "simple_tee_0.3.12" }
 arrayvec = { version = "0.5.2", default-features = false }
-ta-app = { version = "0.1.0", path = "../ta_app" }
+ta-app = { version = "0.1.0", path = "../../common/ta-app" }
 log = "0.4"
 
 [target.armv7-unknown-linux-gnueabihf.dev-dependencies]
