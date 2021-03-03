@@ -5,8 +5,13 @@ use std::net::ToSocketAddrs;
 #[macro_use]
 extern crate log;
 
-use futures::stream::{Stream, StreamExt};
-use jsonrpc_http_server::jsonrpc_core::{BoxFuture, IoHandler, Result};
+use futures::{
+    stream::{Stream, StreamExt},
+    Future, FutureExt,
+};
+use jsonrpc_http_server::jsonrpc_core::{
+    BoxFuture, Error as RpcError, IoHandler, Result as RpcResult,
+};
 
 use host_common::{
     flume::{self, Receiver, Sender},
@@ -18,7 +23,7 @@ use zkms_jsonrpc::ZKMS;
 /// Will start the JSON-RPC service as configured and return a list of incoming service requests
 pub fn start_service<E: Send + std::fmt::Debug + 'static>(
     addr: impl ToSocketAddrs,
-) -> impl Stream<Item = std::result::Result<ServiceRequest<E>, E>> {
+) -> impl Stream<Item = Result<ServiceRequest<E>, E>> {
     //get iohandler for jsonrcp
     let mut io = IoHandler::new();
 
@@ -65,7 +70,7 @@ impl<E: 'static> RpcHandler<E> {
     async fn submit(
         sender: Sender<ServiceRequest<E>>,
         request: RequestMethod,
-    ) -> std::result::Result<RequestResponse, E> {
+    ) -> Result<RequestResponse, E> {
         let (tx, rx) = flume::bounded(1);
 
         let request = ServiceRequest::new(request, tx);
@@ -80,55 +85,70 @@ impl<E: 'static> RpcHandler<E> {
     }
 }
 
-impl<E> ZKMS for RpcHandler<E>
-where
-    E: std::fmt::Debug + Send + 'static,
-{
-    fn generate_new(&self, seed: Option<String>) -> BoxFuture<Result<PublicKey>> {
+impl<E: std::fmt::Debug + 'static> RpcHandler<E> {
+    fn generate_new_impl(&self, seed: Option<String>) -> impl Future<Output = PublicKey> {
         let sender = self.request_sender.clone();
 
-        let fut = async move {
+        async move {
             match Self::submit(sender, RequestMethod::GenerateNew { seed })
                 .await
                 .expect("this call isn't supposed to error")
             {
-                RequestResponse::GenerateNew { public_key } => Ok(public_key),
+                RequestResponse::GenerateNew { public_key } => public_key,
                 _ => panic!("expected generatenew response"),
             }
-        };
-
-        Box::pin(fut)
+        }
     }
 
-    fn get_public_keys(&self) -> BoxFuture<Result<Vec<PublicKey>>> {
+    fn get_public_keys_impl(&self) -> impl Future<Output = Vec<PublicKey>> {
         let sender = self.request_sender.clone();
 
-        let fut = async move {
+        async move {
             match Self::submit(sender, RequestMethod::GetPublicKeys)
                 .await
                 .expect("this call isn't supposed to error")
             {
-                RequestResponse::GetPublicKeys { keys } => Ok(keys),
+                RequestResponse::GetPublicKeys { keys } => keys,
                 _ => panic!("expected getpublickeys response"),
             }
-        };
-
-        Box::pin(fut)
+        }
     }
 
-    fn sign_message(&self, public_key: PublicKey, msg: Vec<u8>) -> BoxFuture<Result<Signature>> {
+    fn sign_message_impl(
+        &self,
+        public_key: PublicKey,
+        msg: Vec<u8>,
+    ) -> impl Future<Output = Result<Signature, E>> {
         let sender = self.request_sender.clone();
 
-        let fut = async move {
-            match Self::submit(sender, RequestMethod::SignMessage { public_key, msg })
-                .await
-                .expect("TODO: handle error")
-            {
+        async move {
+            match Self::submit(sender, RequestMethod::SignMessage { public_key, msg }).await? {
                 RequestResponse::SignMessage { signature } => Ok(signature),
                 _ => panic!("expected signmessage response"),
             }
-        };
+        }
+    }
+}
 
-        Box::pin(fut)
+impl<E> ZKMS for RpcHandler<E>
+where
+    E: std::fmt::Debug + Send + 'static,
+{
+    fn generate_new(&self, seed: Option<String>) -> BoxFuture<RpcResult<PublicKey>> {
+        info!("generate new requested");
+        Box::pin(self.generate_new_impl(seed).map(|k| Ok(k)))
+    }
+
+    fn get_public_keys(&self) -> BoxFuture<RpcResult<Vec<PublicKey>>> {
+        info!("get public keys requested");
+        Box::pin(self.get_public_keys_impl().map(|k| Ok(k)))
+    }
+
+    fn sign_message(&self, public_key: PublicKey, msg: Vec<u8>) -> BoxFuture<RpcResult<Signature>> {
+        info!("sign requested");
+        Box::pin(
+            self.sign_message_impl(public_key, msg)
+                .map(|result| result.map_err(|e| RpcError::invalid_params(format!("{:?}", e)))),
+        )
     }
 }
