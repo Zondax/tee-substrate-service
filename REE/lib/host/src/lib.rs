@@ -5,12 +5,13 @@
 
 #![no_builtins]
 
+#[macro_use]
+extern crate log;
+
 mod optee_handler;
 
 use optee_common::{CommandId, TeeError};
 use zondee_teec::wrapper::{raw, Operation, Param};
-
-use host_app;
 
 extern "C" {
     fn invoke_optee_command(command_id: u32, op: *mut raw::TEEC_Operation) -> u32;
@@ -30,16 +31,22 @@ pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
 
 #[no_mangle]
 pub extern "C" fn run() -> u32 {
+    env_logger::init();
+
+    info!("starting jsonrpc service...");
+
     //create tokio runtime for the application
-    let rt = tokio::runtime::Builder::new_current_thread()
+    let mut rt = tokio::runtime::Builder::new()
+        .threaded_scheduler()
         .enable_io()
         .build()
         .expect("unable to initialize tokio runtime");
 
-    rt.block_on(async move {
-        //start the service
-        let service = host_jsonrpc::start_service("127.0.0.1:39946").await;
+    //start the service
+    let service = host_jsonrpc::start_service("0.0.0.0:39946");
 
+    rt.block_on(async move {
+        info!("jsonrpc service started! forwarding to handler...");
         //call the host service that retrieves requests and handles them with the appropriate handler
         host_app::start_service(service, optee_handler::Handler::default()).await;
         0

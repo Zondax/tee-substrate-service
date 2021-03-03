@@ -2,6 +2,9 @@
 
 use std::net::ToSocketAddrs;
 
+#[macro_use]
+extern crate log;
+
 use futures::stream::{Stream, StreamExt};
 use jsonrpc_http_server::jsonrpc_core::{BoxFuture, IoHandler, Result};
 
@@ -13,7 +16,7 @@ use host_common::{
 use zkms_jsonrpc::ZKMS;
 
 /// Will start the JSON-RPC service as configured and return a list of incoming service requests
-pub async fn start_service<E: Send + std::fmt::Debug + 'static>(
+pub fn start_service<E: Send + std::fmt::Debug + 'static>(
     addr: impl ToSocketAddrs,
 ) -> impl Stream<Item = std::result::Result<ServiceRequest<E>, E>> {
     //get iohandler for jsonrcp
@@ -29,10 +32,13 @@ pub async fn start_service<E: Send + std::fmt::Debug + 'static>(
         .next()
         .expect("no valid address provided");
 
-    tokio::task::spawn_blocking(move || async move {
+    let _ = std::thread::spawn(move || {
         let server = jsonrpc_http_server::ServerBuilder::new(io)
+            .rest_api(jsonrpc_http_server::RestApi::Unsecure)
             .start_http(&addr)
             .expect("unable to start rpc server");
+
+        info!("starting JSONRPC server at : http://{:}", addr);
         server.wait();
     });
 

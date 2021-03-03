@@ -9,8 +9,9 @@ edition = "2018"
 [dependencies]
 host-common = { version = "0.1", features = ["serde"], path = "../../host-common" }
 futures = { version = "0.3" }
+log = "0.4"
 
 zkms-jsonrpc = { version = "0.1", path = "../zkms" }
 jsonrpc-http-server = "17"
 jsonrpc-core = "17"
-tokio = { version = "1", features = ["rt"] }
+tokio = { version = "0.2", features = ["blocking"] }

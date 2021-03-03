@@ -19,6 +19,7 @@ pub type ResponseSender<E> = Sender<Result<RequestResponse, E>>;
 /// Type returned by the service
 ///
 /// Contains the requested method and a way to reply back (if a response is expected)
+#[derive(Debug)]
 pub struct ServiceRequest<E> {
     pub method: RequestMethod,
     channel: Option<ResponseSender<E>>,

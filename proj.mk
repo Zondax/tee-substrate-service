@@ -35,3 +35,6 @@ endif
 export V?=0
 export UTEE_ROOT=$(TA_DEV_KIT_DIR)
 export TEEC_ROOT=$(TEEC_EXPORT)/usr
+
+export QEMU_EXTRA_ARGS +=\
+	-nic user,hostfwd=tcp::8080-:39946
