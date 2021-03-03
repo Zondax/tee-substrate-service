@@ -8,7 +8,7 @@ OBJCOPY ?= $(CROSS_COMPILE)objcopy
 OBJDUMP ?= $(CROSS_COMPILE)objdump
 READELF ?= $(CROSS_COMPILE)readelf
 
-CFLAGS 	+= -Wall -I$(TA_INCLUDE) -I$(TEEC_EXPORT)/usr/include -I./include -fPIC
+CFLAGS 	+= -Wall -I../../../$(TA)/bin/ta/include -I$(TEEC_EXPORT)/usr/include -I./include -fPIC
 CFLAGS 	+= -I../../lib/host/include
 
 LDFLAGS += --hash-style=gnu

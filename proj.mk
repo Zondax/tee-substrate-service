@@ -1,9 +1,8 @@
 #set common environment variables betwen the framework makefiles
 export PROJ_NAME = remotee_signer
 
-export HOST = TEE
-export TA = REE
-export TA_INCLUDE = $(TA)/bin/ta/include
+export HOST = REE
+export TA = TEE
 
 # Set environment according to /optee/build/common.mk & specific
 

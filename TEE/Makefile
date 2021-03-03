@@ -17,4 +17,4 @@ cclean:
 	$(MAKE) -C bin/ta clean
 
 copy: all
-	cp out/$(TA_UUID).ta $(SHARED_FOLDER)
+	cp bin/ta/$(TA_UUID).ta $(SHARED_FOLDER)

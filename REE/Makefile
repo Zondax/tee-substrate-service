@@ -16,4 +16,4 @@ cclean:
 	$(MAKE) -C bin/host clean
 
 copy: all
-	cp out/$(PROJ_NAME) $(SHARED_FOLDER)
+	cp bin/host/$(PROJ_NAME) $(SHARED_FOLDER)

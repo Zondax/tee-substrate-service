@@ -6,15 +6,15 @@ include proj.mk
 deps:
 	rustup target add $(RUST_TARGET)
 
-all: cclean
+all:
 	$(MAKE) -C $(HOST) all
 	$(MAKE) -C $(TA) all
 
-copy: all
+copy:
 	$(MAKE) -C $(TA) copy
 	$(MAKE) -C $(HOST) copy
 
-clean:
+clean: cclean
 	$(MAKE) -C $(HOST) clean
 	$(MAKE) -C $(TA) clean
 
