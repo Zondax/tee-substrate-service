@@ -7,10 +7,11 @@
 #[macro_use]
 extern crate log;
 
-use flume::Sender;
+pub use futures::channel;
+
+use channel::oneshot::Sender;
 use futures::stream::Stream;
 
-pub use flume;
 pub use zkms_common::{self, RequestMethod, RequestResponse};
 
 /// Type alias for the channel to send the result of the request to
@@ -50,14 +51,16 @@ impl<E> ServiceRequest<E> {
             channel: channel.into(),
         }
     }
+}
 
+impl<E: std::fmt::Debug> ServiceRequest<E> {
     /// Consume the request and reply with the given response if a response was expected
     ///
     /// If no response is needed then this method shouldn't be called
     pub async fn reply(self, response: Result<RequestResponse, E>) {
         if let Some(chan) = self.channel {
             trace!("reply was expected, sending to service...");
-            if let Err(e) = chan.send_async(response).await {
+            if let Err(e) = chan.send(response) {
                 warn!("unable to send response to service! err={:?}", e);
             }
         }

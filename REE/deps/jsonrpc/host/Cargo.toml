@@ -15,3 +15,8 @@ zkms-jsonrpc = { version = "0.1", path = "../zkms" }
 jsonrpc-http-server = "17"
 jsonrpc-core = "17"
 tokio = { version = "0.2", features = ["blocking"] }
+
+[dev-dependencies]
+jsonrpc-test = "17"
+tokio = { version = "0.2", features = ["test-util", "rt-threaded", "macros"] }
+env_logger = "*"

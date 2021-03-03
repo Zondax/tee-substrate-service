@@ -33,19 +33,17 @@ pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
 pub extern "C" fn run() -> u32 {
     env_logger::init();
 
-    info!("starting jsonrpc service...");
-
     //create tokio runtime for the application
     let mut rt = tokio::runtime::Builder::new()
-        .threaded_scheduler()
+        .basic_scheduler()
         .enable_io()
         .build()
         .expect("unable to initialize tokio runtime");
 
-    //start the service
-    let service = host_jsonrpc::start_service("0.0.0.0:39946");
-
     rt.block_on(async move {
+        info!("starting jsonrpc service...");
+        //start the service
+        let service = host_jsonrpc::start_service("0.0.0.0:39946").await;
         info!("jsonrpc service started! forwarding to handler...");
         //call the host service that retrieves requests and handles them with the appropriate handler
         host_app::start_service(service, optee_handler::Handler::default()).await;
