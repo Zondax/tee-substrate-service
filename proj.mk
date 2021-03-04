@@ -36,5 +36,8 @@ export V?=0
 export UTEE_ROOT=$(TA_DEV_KIT_DIR)
 export TEEC_ROOT=$(TEEC_EXPORT)/usr
 
-export QEMU_EXTRA_ARGS +=\
-	-nic user,hostfwd=tcp::8080-:39946
+#QEMU CONFIGURATION
+export QEMU_VIRTFS_ENABLE = y
+export QEMU_VIRTFS_AUTOMOUNT = y
+export QEMU_VIRTFS_HOST_DIR = $(SHARED_FOLDER)
+export HOSTFWD = ,hostfwd=tcp::8080-:39946
