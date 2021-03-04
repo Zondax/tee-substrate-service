@@ -13,5 +13,6 @@ serde_ = ["serde", "schnorrkel/serde"]
 [dependencies]
 serde = { version = "1.0.123", features = ["derive"], optional = true }
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
+thiserror = "1"
 
 [build-dependencies]

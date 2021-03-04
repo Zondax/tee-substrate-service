@@ -10,3 +10,5 @@ edition = "2018"
 zkms-common = { version = "0.1", path = "../../zkms-common", features = ["serde_"] }
 jsonrpc-derive = "17"
 jsonrpc-core = "17"
+derive_more = "0.99.11"
+hex = "0.4"

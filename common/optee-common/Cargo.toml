@@ -4,8 +4,14 @@ version = "0.1.0"
 authors = ["Zondax GmbH <info@zondax.ch>"]
 edition = "2018"
 
+[features]
+default = []
+std = ["no-std-compat/std"]
+
 [lib]
 name = "optee_common"
 crate-type = ["rlib"]
 
 [dependencies]
+no-std-compat = "0.4.1"
+schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }

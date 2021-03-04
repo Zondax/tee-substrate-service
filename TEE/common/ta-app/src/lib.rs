@@ -2,12 +2,12 @@
 
 use core::cell::{Ref, RefCell, RefMut};
 
-use optee_common::{CommandId, HandleTaCommand, TeeErrorCode as Error};
-use rand_core::{CryptoRng, RngCore};
-use schnorrkel::{
-    keys::{Keypair, PUBLIC_KEY_LENGTH},
-    PublicKey, SecretKey, Signature, SIGNATURE_LENGTH,
+use optee_common::{
+    CommandId, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
+    TeeErrorCode as Error,
 };
+use rand_core::{CryptoRng, RngCore};
+use schnorrkel::{keys::Keypair, PublicKey, SecretKey, Signature};
 
 mod util;
 use util::CSPRNG;
@@ -49,25 +49,21 @@ impl<'r> HandleTaCommand for TaApp<'r> {
 
         match cmd_id {
             CommandId::GenerateNew => {
-                let seed_len = util::read_and_advance_u64(&mut input)? as _;
-                trace!("read seed_len={:?}", seed_len);
+                let seed: &str = Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                trace!("read seed_len={:?}", seed.len());
 
-                match seed_len {
+                match seed.len() {
                     0 => {
                         let keypair = Keypair::generate_with(&mut self.rng);
-                        let pk_bytes = keypair.public.to_bytes();
-                        trace!("generated keypair; public={:x?}", pk_bytes);
+                        trace!("generated keypair; public={:x?}", keypair.public.to_bytes());
+
+                        //write to output
+                        keypair.public.serialize_fixed(output).unwrap();
 
                         //store keypair
                         self.keys[0].replace(keypair);
-
-                        //write to output
-                        output[..PUBLIC_KEY_LENGTH].copy_from_slice(&pk_bytes[..]);
                     }
                     len => {
-                        let seed =
-                            core::str::from_utf8(&input[..len]).map_err(|_| Error::BadFormat)?;
-
                         todo!("private key with seed")
                     }
                 }
@@ -78,12 +74,13 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 todo!()
             }
             CommandId::SignMessage => {
-                let public = util::read_and_advance(&mut input, PUBLIC_KEY_LENGTH)?;
-                let public = PublicKey::from_bytes(&public).map_err(|_| Error::BadFormat)?;
+                let public: PublicKey =
+                    PublicKey::deserialize_owned(&input).map_err(|_| Error::BadFormat)?;
                 trace!("read public key: {:x?}", public.to_bytes());
 
-                let msg_len = util::read_and_advance_u64(&mut input)? as _;
-                let msg = &input[..msg_len];
+                util::advance_slice(&mut input, PublicKey::len()).unwrap();
+
+                let msg: &[u8] = Deserialize::deserialize(&input).unwrap();
                 trace!("read msg: {:x?}", msg);
 
                 let secret = self
@@ -92,10 +89,9 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 trace!("got key");
 
                 let sig = self.sign(&secret, b"zondax", &msg, &public);
-                let sig = sig.to_bytes();
                 trace!("signed!");
 
-                output[..SIGNATURE_LENGTH].copy_from_slice(&sig[..]);
+                sig.serialize_fixed(output).unwrap();
                 trace!("signature copied to out");
 
                 Ok(())
@@ -112,7 +108,7 @@ impl<'r> TaApp<'r> {
                 let len = util::read_and_advance_u64(&mut input)?;
 
                 let input = input.len() >= len as _;
-                let out = out.len() >= PUBLIC_KEY_LENGTH;
+                let out = out.len() >= PublicKey::len();
 
                 if input && out {
                     Ok(())
@@ -127,12 +123,12 @@ impl<'r> TaApp<'r> {
                 //we can skip the public key here
 
                 //attempt to read public_key, error if failed
-                let _ = util::read_and_advance(&mut input, PUBLIC_KEY_LENGTH)?;
+                let _ = util::read_and_advance(&mut input, PublicKey::len())?;
 
                 let len = util::read_and_advance_u64(&mut input)?;
                 let input = input.len() >= len as _; //check msg len
 
-                let out = out.len() >= SIGNATURE_LENGTH;
+                let out = out.len() >= Signature::len();
 
                 if input && out {
                     Ok(())
@@ -194,9 +190,10 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
 #[cfg(test)]
 mod tests {
     extern crate std;
-    use std::{boxed::Box, dbg, vec::Vec};
+    use std::{boxed::Box, dbg, vec, vec::Vec};
 
     use super::*;
+    use optee_common::Serialize;
 
     impl Default for TaApp<'static> {
         fn default() -> Self {
@@ -229,8 +226,11 @@ mod tests {
     fn get_random_key() {
         let mut rng = rand_core::OsRng;
         let mut app = TaApp::with_rng(&mut rng);
-        let input = 0u64.to_le_bytes();
-        let mut output = [0; PUBLIC_KEY_LENGTH];
+
+        let input = "".serialize().unwrap();
+
+        let mut output = Vec::new();
+        output.resize(PublicKey::len(), 0);
 
         app.process_command(CommandId::GenerateNew, &input[..], &mut output)
             .expect("shouldn't fail");
@@ -247,17 +247,16 @@ mod tests {
         let sk = keypair();
         app.set_keys(&[&sk]);
 
-        let msg = b"francesco@zondax.ch";
+        let msg = &b"francesco@zondax.ch"[..];
 
         let input = {
-            let mut vec = std::vec::Vec::new();
-            vec.extend_from_slice(&sk.public.to_bytes()[..]);
-            vec.extend_from_slice(&msg.len().to_le_bytes()[..]);
-            vec.extend_from_slice(&msg[..]);
+            let mut vec = vec![0u8; PublicKey::len()];
+            sk.public.serialize_fixed(&mut vec).unwrap();
+            vec.append(&mut msg.serialize().unwrap());
             vec
         };
 
-        let mut output = [0; SIGNATURE_LENGTH];
+        let mut output = vec![0u8; Signature::len()];
 
         app.process_command(CommandId::SignMessage, &input[..], &mut output)
             .expect("shouldn't fail");

@@ -22,7 +22,7 @@ env_logger = "0.8.3"
 
 zkms-common = { version = "0.1.0",  path = "../../deps/zkms-common" }
 host-app = { version = "0.1.0", path = "../../common/host-app" }
-optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["std"] }
 zondee-teec = { version = "0.1.0", git = "https://github.com/Zondax/hello-rustee", branch = "simple_tee_0.3.12"  }
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 

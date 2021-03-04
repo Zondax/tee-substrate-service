@@ -9,19 +9,17 @@ use futures::{
     stream::{Stream, StreamExt},
     Future, FutureExt, SinkExt,
 };
-use jsonrpc_http_server::jsonrpc_core::{
-    BoxFuture, Error as RpcError, IoHandler, Result as RpcResult,
-};
+use jsonrpc_http_server::jsonrpc_core::{BoxFuture, IoHandler, Result as RpcResult};
 
 use host_common::{
     channel::{self, mpsc::UnboundedReceiver as Receiver, mpsc::UnboundedSender as Sender},
     zkms_common::schnorrkel::{PublicKey, Signature},
     RequestMethod, RequestResponse, ServiceRequest,
 };
-use zkms_jsonrpc::ZKMS;
+use zkms_jsonrpc::{ErrorWrapper as RpcError, ZKMS};
 
 /// prepares the IoHandler with the Rpc impl
-fn get_io_handler<E: std::fmt::Debug + Send + 'static>() -> (IoHandler, Receiver<ServiceRequest<E>>)
+fn get_io_handler<E: Into<RpcError> + Send + 'static>() -> (IoHandler, Receiver<ServiceRequest<E>>)
 {
     let mut io = IoHandler::new();
 
@@ -33,7 +31,7 @@ fn get_io_handler<E: std::fmt::Debug + Send + 'static>() -> (IoHandler, Receiver
 }
 
 /// Will start the JSON-RPC service as configured and return a list of incoming service requests
-pub async fn start_service<E: Send + std::fmt::Debug + 'static>(
+pub async fn start_service<E: Send + Into<RpcError> + 'static>(
     addr: impl ToSocketAddrs,
 ) -> impl Stream<Item = Result<ServiceRequest<E>, E>> {
     //get iohandler for jsonrcp
@@ -66,7 +64,7 @@ struct RpcHandler<E> {
 
 impl<E> RpcHandler<E>
 where
-    E: Send + std::fmt::Debug,
+    E: Send,
 {
     pub fn new() -> (RpcHandler<E>, Receiver<ServiceRequest<E>>) {
         let (tx, rx) = channel::mpsc::unbounded();
@@ -76,7 +74,10 @@ where
     }
 }
 
-impl<E: std::fmt::Debug + 'static + Send> RpcHandler<E> {
+impl<E> RpcHandler<E>
+where
+    E: Send + 'static,
+{
     async fn submit(
         mut sender: Sender<ServiceRequest<E>>,
         request: RequestMethod,
@@ -136,39 +137,30 @@ impl<E: std::fmt::Debug + 'static + Send> RpcHandler<E> {
 
 impl<E> ZKMS for RpcHandler<E>
 where
-    E: std::fmt::Debug + Send + 'static,
+    E: Into<RpcError> + Send + 'static,
 {
     fn generate_new(&self, seed: Option<String>) -> BoxFuture<RpcResult<PublicKey>> {
         info!("generate new requested");
-        Box::pin(self.generate_new_impl(seed).map(|k| {
-            k.map_err(|e| {
-                let mut err = RpcError::internal_error(); //TODO: impl Into<RpcError> for E (the actual type)
-                err.message = format!("{:?}", e);
-                err
-            })
-        }))
+        Box::pin(
+            self.generate_new_impl(seed)
+                .map(|k| k.map_err(Into::into).map_err(Into::into)),
+        )
     }
 
     fn get_public_keys(&self) -> BoxFuture<RpcResult<Vec<PublicKey>>> {
         info!("get public keys requested");
-        Box::pin(self.get_public_keys_impl().map(|k| {
-            k.map_err(|e| {
-                let mut err = RpcError::internal_error();
-                err.message = format!("{:?}", e);
-                err
-            })
-        }))
+        Box::pin(
+            self.get_public_keys_impl()
+                .map(|k| k.map_err(Into::into).map_err(Into::into)),
+        )
     }
 
     fn sign_message(&self, public_key: PublicKey, msg: Vec<u8>) -> BoxFuture<RpcResult<Signature>> {
         info!("sign requested");
-        Box::pin(self.sign_message_impl(public_key, msg).map(|k| {
-            k.map_err(|e| {
-                let mut err = RpcError::internal_error();
-                err.message = format!("{:?}", e);
-                err
-            })
-        }))
+        Box::pin(
+            self.sign_message_impl(public_key, msg)
+                .map(|k| k.map_err(Into::into).map_err(Into::into)),
+        )
     }
 }
 
@@ -177,19 +169,21 @@ mod tests {
     use super::*;
     use jsonrpc_test::Rpc;
 
-    fn get_test_handler() -> (Rpc, Receiver<ServiceRequest<String>>) {
+    fn get_test_handler() -> (Rpc, Receiver<ServiceRequest<RpcError>>) {
         let (handler, rx) = RpcHandler::new();
         let rpc = Rpc::new(handler.to_delegate());
 
         (rpc, rx)
     }
 
-    async fn handle_requests(rx: Receiver<ServiceRequest<String>>) {
+    async fn handle_requests(rx: Receiver<ServiceRequest<RpcError>>) {
         tokio::spawn(async move {
             futures::pin_mut!(rx);
             while let Some(srv_req) = rx.next().await {
                 info!("got a request: {:?}", srv_req);
-                srv_req.reply(Err("dummy".to_string())).await
+                let mut err = RpcError::internal_error();
+                err.message = "dummy".to_string();
+                srv_req.reply(Err(err)).await
             }
         });
     }

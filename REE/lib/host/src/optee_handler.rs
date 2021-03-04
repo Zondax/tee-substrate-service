@@ -3,13 +3,10 @@
 //! This Handler is implemented here because this module has access to private functions that
 //! do the weight lifting of performing invocations to OPTEE through the TEEC api, which is unsafe
 //! Also by doing this the host client doesnt need to depend on obscure OPTEE bindings
-use schnorrkel::{
-    keys::{PublicKey, PUBLIC_KEY_LENGTH},
-    sign::{Signature, SIGNATURE_LENGTH},
-};
-use zkms_common::{HandleRequest, RequestMethod, RequestResponse};
+use schnorrkel::{keys::PublicKey, sign::Signature};
+use zkms_common::{HandleRequest, RequestError, RequestMethod, RequestResponse};
 
-use optee_common::CommandId;
+use optee_common::{CommandId, Deserialize, Serialize, SerializeFixed};
 
 use crate::invoke_command;
 
@@ -19,7 +16,7 @@ use zondee_teec::wrapper::{Operation, ParamNone, ParamTmpRef};
 pub struct Handler {}
 
 impl HandleRequest for Handler {
-    fn process_request(&self, request: RequestMethod) -> Result<RequestResponse, String> {
+    fn process_request(&self, request: RequestMethod) -> Result<RequestResponse, RequestError> {
         //convert items from RequestMethod
         // to something that optee_common understands
         // and `invoke_command`
@@ -28,19 +25,11 @@ impl HandleRequest for Handler {
                 //convert seed to &str, pass the slice in bytes with prepended len (u64)
                 // public key (output) is 32 bytes
 
-                let mut out = [0u8; PUBLIC_KEY_LENGTH];
+                let mut out = vec![0u8; PublicKey::len()];
 
                 let vec = match seed {
-                    None => 0u64.to_le_bytes().to_vec(),
-                    Some(seed) => {
-                        let len = seed.len();
-
-                        let mut vec = vec![0; 8 + len];
-                        vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
-                        vec[8..].copy_from_slice(seed.as_bytes());
-
-                        vec
-                    }
+                    None => "".serialize().unwrap(),
+                    Some(seed) => seed.as_str().serialize().unwrap(),
                 };
                 let p0 = ParamTmpRef::new_input(&vec);
 
@@ -50,7 +39,7 @@ impl HandleRequest for Handler {
 
                 invoke_command(CommandId::GenerateNew.into(), &mut op)
                     .map_err(|e| e.to_string())?;
-                let out = PublicKey::from_bytes(&out[..]).map_err(|e| e.to_string())?;
+                let out = PublicKey::deserialize(&out[..]).map_err(|e| e.to_string())?;
 
                 Ok(RequestResponse::GenerateNew { public_key: out })
             }
@@ -69,13 +58,12 @@ impl HandleRequest for Handler {
                 //the key is fixed lenght, so just dump it,
                 // the msg prepent length before
                 // signature (output) is 64 bytes
-                let mut out = [0; SIGNATURE_LENGTH];
+                let mut out = vec![0u8; Signature::len()];
 
                 let vec = {
-                    let mut vec = Vec::with_capacity(PUBLIC_KEY_LENGTH + 8 + msg.len());
-                    vec.extend_from_slice(&public_key.to_bytes()[..]);
-                    vec.extend_from_slice(&msg.len().to_le_bytes()[..]);
-                    vec.extend_from_slice(&msg);
+                    let mut vec = vec![0u8; PublicKey::len()];
+                    public_key.serialize_fixed(&mut vec).unwrap();
+                    vec.append(&mut msg.as_slice().serialize().unwrap());
                     vec
                 };
                 let p0 = ParamTmpRef::new_input(&vec);
@@ -86,7 +74,7 @@ impl HandleRequest for Handler {
 
                 invoke_command(CommandId::SignMessage.into(), &mut op)
                     .map_err(|e| e.to_string())?;
-                let out = Signature::from_bytes(&out[..]).map_err(|e| e.to_string())?;
+                let out = Signature::deserialize(&out[..]).map_err(|e| e.to_string())?;
 
                 Ok(RequestResponse::SignMessage { signature: out })
             }

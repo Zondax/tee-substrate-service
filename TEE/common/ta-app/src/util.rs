@@ -34,6 +34,16 @@ pub fn read_and_advance<'s>(slice: &mut &'s [u8], amt: usize) -> Result<&'s [u8]
     Ok(out)
 }
 
+/// Advance a slice by a fixed amount but do a bound check first
+pub fn advance_slice(slice: &mut &[u8], amt: usize) -> Result<(), Error> {
+    if slice.len() < amt {
+        Err(Error::OutOfMemory)
+    } else {
+        *slice = &slice[amt..];
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     extern crate std;

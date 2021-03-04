@@ -12,6 +12,6 @@
 )]
 
 pub mod protocol;
-pub use protocol::{HandleRequest, RequestMethod, RequestResponse};
+pub use protocol::{HandleRequest, RequestError, RequestMethod, RequestResponse};
 
 pub use schnorrkel;

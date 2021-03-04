@@ -15,10 +15,10 @@ extern crate log;
 
 use futures::stream::StreamExt;
 use host_common::REEService;
-use zkms_common::HandleRequest;
+use zkms_common::{HandleRequest, RequestError};
 
 pub async fn start_service(
-    service: impl REEService<ServiceError = String> + 'static,
+    service: impl REEService<ServiceError = RequestError> + 'static,
     handler: impl HandleRequest + 'static,
 ) {
     futures::pin_mut!(service);
@@ -29,9 +29,7 @@ pub async fn start_service(
             Err(e) => error!("failed to retrieve next item from service: {:?}", e),
             Ok(request) => {
                 //pass request to handler
-                let response = handler
-                    .process_request(request.method.clone())
-                    .map_err(|s| format!("Error processing request: {}", s));
+                let response = handler.process_request(request.method.clone());
 
                 debug!(
                     "processed request={:?}; response={:?}",

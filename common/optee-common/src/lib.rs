@@ -1,6 +1,10 @@
 //! Common types definitions to be used by host and ta
 #![no_std]
 
+extern crate no_std_compat as std;
+
+use std::prelude::v1::*;
+
 mod tee_error;
 pub use tee_error::{TeeError, TeeErrorCode};
 
@@ -12,7 +16,7 @@ pub enum CommandId {
     SignMessage,
 }
 
-impl core::convert::TryFrom<u32> for CommandId {
+impl std::convert::TryFrom<u32> for CommandId {
     type Error = ();
 
     fn try_from(cmd: u32) -> Result<Self, ()> {
@@ -40,3 +44,6 @@ pub trait HandleTaCommand {
         output: &mut [u8],
     ) -> Result<(), TeeErrorCode>;
 }
+
+mod serde;
+pub use serde::*;
