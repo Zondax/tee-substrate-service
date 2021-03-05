@@ -1,11 +1,12 @@
 #![no_std]
 #![no_builtins]
+#![cfg_attr(not(test), feature(alloc_error_handler))]
 
 use optee_common::{CommandId, HandleTaCommand};
 use ta_app::borrow_mut_app;
 use zondee_utee::wrapper::{
     raw::{TEE_Param, TEE_PARAM_TYPES},
-    utee_panic, ParamType, Parameters, TaErrorCode as Error,
+    ParamType, Parameters, TaErrorCode as Error,
 };
 
 mod optee;
@@ -14,16 +15,26 @@ mod optee;
 extern crate log;
 
 use core::convert::TryFrom;
-#[cfg(not(test))]
-use core::panic::PanicInfo;
 
 #[cfg(not(test))]
-#[panic_handler]
-fn panic(info: &PanicInfo) -> ! {
-    // TODO: Good place for calling TEE_Panic function
-    error!("[ERROR] TA Panic: {}", info);
+mod lang_items {
+    use core::panic::PanicInfo;
+    use zondee_utee::wrapper::{utee_panic, TEEAllocator};
 
-    utee_panic(0);
+    #[panic_handler]
+    fn panic(info: &PanicInfo) -> ! {
+        error!("[ERROR] TA Panic: {}", info);
+
+        utee_panic(0)
+    }
+
+    #[global_allocator]
+    static GLOBAL: TEEAllocator = TEEAllocator;
+
+    #[alloc_error_handler]
+    fn oom(_: core::alloc::Layout) -> ! {
+        utee_panic(1)
+    }
 }
 
 #[no_mangle]
