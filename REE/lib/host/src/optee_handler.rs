@@ -52,7 +52,22 @@ impl HandleRequest for Handler {
                 // reinterpret it and extract the keys from there...
                 // ig we can make 2 request? 1 to retrieve number of public keys
                 // and the other one to actually get the data
-                todo!()
+                //
+                // turns out the spec agrees with me, a bit. the size paramenter of the memref
+                // if bigger should be interpreted as a request for a bigger buffer, so in this case
+                // we'd reallocate a bigger buffer of the specified size and pass it again, kinda like asking
+                // how many keys we have..
+
+                let mut out = 0u64.to_le_bytes();
+                let vec = 0u64.to_le_bytes();
+
+                let p0 = ParamTmpRef::new_input(&vec);
+                let p1 = ParamTmpRef::new_output(&mut out[..]);
+
+                let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
+                invoke_command(CommandId::GetKeys.into(), &mut op).map_err(|e| e.to_string())?;
+
+                Ok(RequestResponse::GetPublicKeys { keys: Vec::new() })
             }
             RequestMethod::SignMessage { public_key, msg } => {
                 //the key is fixed lenght, so just dump it,

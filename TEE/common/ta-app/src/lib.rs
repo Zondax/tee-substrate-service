@@ -1,6 +1,9 @@
 #![no_std]
 
-use core::cell::{Ref, RefCell, RefMut};
+extern crate no_std_compat as std;
+use std::prelude::v1::*;
+
+use std::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{
     CommandId, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
@@ -16,8 +19,8 @@ use util::CSPRNG;
 extern crate log;
 
 pub struct TaApp<'r> {
-    keys: [Option<Keypair>; 1], //we'll have to figure later how to expand this
-    rng: &'r mut dyn CSPRNG,    //the rng provider
+    keys: Vec<Keypair>,
+    rng: &'r mut dyn CSPRNG, //the rng provider
 }
 
 // This is safe because all request are serialized by the TA framework
@@ -61,7 +64,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                         keypair.public.serialize_fixed(output).unwrap();
 
                         //store keypair
-                        self.keys[0].replace(keypair);
+                        self.keys.push(keypair);
                     }
                     len => {
                         todo!("private key with seed")
@@ -71,6 +74,14 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 Ok(())
             }
             CommandId::GetKeys => {
+                trace!("number of keys: {:?}", self.keys.len());
+
+                for (i, key) in self.keys.iter().enumerate() {
+                    let bytes = key.public.to_bytes();
+                    let hex = hex::encode(&bytes);
+                    trace!("key {}: {}", i, hex);
+                }
+
                 todo!()
             }
             CommandId::SignMessage => {
@@ -116,9 +127,7 @@ impl<'r> TaApp<'r> {
                     Err(Error::OutOfMemory)
                 }
             }
-            CommandId::GetKeys => {
-                todo!()
-            }
+            CommandId::GetKeys => Ok(()),
             CommandId::SignMessage => {
                 //we can skip the public key here
 
@@ -150,7 +159,7 @@ impl<'r> TaApp<'r> {
 
     fn find_associated_key(&self, public_key: PublicKey) -> Option<SecretKey> {
         let mut keys = self.keys.iter();
-        while let Some(Some(pair)) = keys.next() {
+        while let Some(pair) = keys.next() {
             if pair.public == public_key {
                 return Some(pair.secret.clone()); //this is just 64 bytes
             }
@@ -189,9 +198,6 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-    use std::{boxed::Box, dbg, vec, vec::Vec};
-
     use super::*;
     use optee_common::Serialize;
 
@@ -211,7 +217,7 @@ mod tests {
             let keys: Vec<_> = keypairs
                 .iter()
                 .take(self.keys.len())
-                .map(|k| Some((*k).clone()))
+                .map(|k| (*k).clone())
                 .collect();
 
             self.keys.clone_from_slice(keys.as_slice());

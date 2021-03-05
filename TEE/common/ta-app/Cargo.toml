@@ -8,12 +8,17 @@ edition = "2018"
 optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
 log = "0.4"
 rand_core = "0.6"
+no-std-compat = { version = "0.4.1", features = ["alloc"] }
 
 #crypto
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 merlin = { version = "3", default-features = false }
 
+#misc
+hex = { version = "0.4", default-features = false, features = ["alloc"] }
+
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["std"] }
 rand = "0.8"
 optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["std"] }
+no-std-compat = { version = "0.4.1", features = ["std", "alloc"] }
