@@ -1,5 +1,5 @@
  [workspace]
- members = ["lib/ta", "common/ta-app",
+ members = ["lib", "common/ta-app",
             "deps/ta-common"]
  
  resolver = "2"

@@ -1,5 +1,5 @@
  [workspace]
- members = ["lib/host", "common/host-app",
+ members = ["lib", "common/host-app",
             "deps/host-common", "deps/zkms-common",
             "deps/jsonrpc/host", "deps/jsonrpc/zkms"
             ]
