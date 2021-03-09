@@ -6,7 +6,7 @@ edition = "2018"
 
 [features]
 default = []
-std = ["no-std-compat/std"]
+alloc = ["no-std-compat/alloc"]
 
 [lib]
 name = "optee_common"

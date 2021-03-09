@@ -34,7 +34,7 @@ impl<'de, T: DeserializeOwned> Deserialize<'de> for T {
     }
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 ///This type needs a variable amount of storage when serializing
 pub trait Serialize {
     type Error;
@@ -42,7 +42,7 @@ pub trait Serialize {
     fn serialize(&self) -> Result<Vec<u8>, Self::Error>;
 }
 
-#[cfg(feature = "std")]
+#[cfg(feature = "alloc")]
 impl<T: SerializeFixed> Serialize for T {
     type Error = <Self as SerializeFixed>::ErrorFixed;
 
@@ -58,7 +58,7 @@ impl<T: SerializeFixed> Serialize for T {
 
 mod schnorrkel_impl;
 
-#[cfg(feature = "std")]
-mod std_impl;
+#[cfg(feature = "alloc")]
+mod alloc_impl;
 
 mod core_impl;

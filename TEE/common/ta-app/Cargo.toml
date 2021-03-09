@@ -20,5 +20,5 @@ hex = { version = "0.4", default-features = false, features = ["alloc"] }
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["std"] }
 rand = "0.8"
-optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["std"] }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["alloc"] }
 no-std-compat = { version = "0.4.1", features = ["std", "alloc"] }
