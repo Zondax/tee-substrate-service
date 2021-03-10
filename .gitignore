@@ -3,11 +3,3 @@
 **/*/Cargo.lock
 .cargo/registry
 .cargo/.package-cache
-TEE/bin/ta/8d22f026-eb0a-4401-b575-5cf59327119b.*
-TEE/bin/ta/*.cmd
-TEE/bin/ta/*.d
-TEE/bin/ta/*.o
-TEE/bin/ta/*.lds
-TEE/bin/ta/dyn_list
-REE/bin/host/*.o
-REE/bin/host/remotee_signer
