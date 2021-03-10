@@ -1,11 +1,14 @@
 use ta_app::{close_session, open_session};
-use zondee_utee::wrapper::{TEERng, TEELogger, TaErrorCode as Error};
+use zondee_utee::wrapper::{raw::TEE_Param, TEELogger, TEERng, TaErrorCode as Error};
+
+//The signatures of the following functions are defined in the framework's rustee_ta.h file
 
 #[no_mangle]
-pub extern "C" fn TA_CreateEntryPoint() -> u32 {
+pub extern "C" fn RUSTEE_Create() -> u32 {
     TEELogger::install().expect("unable to set logger");
 
-    trace!("CreateEntryPoint has been called");
+    trace!("Creating");
+
     // Only one instance is allowed to run by session
     if let Err(_) = open_session(TEERng::new_static()) {
         error!("[ERROR] can not create inner handler");
@@ -17,12 +20,35 @@ pub extern "C" fn TA_CreateEntryPoint() -> u32 {
 }
 
 #[no_mangle]
-pub extern "C" fn TA_DestroyEntryPoint() -> () {
-    trace!("Destroying entry point");
+pub extern "C" fn RUSTEE_Destroy() -> () {
+    trace!("Destroying");
 }
 
 #[no_mangle]
-pub extern "C" fn TA_CloseSessionEntryPoint(_session_context: *const u8) -> () {
-    trace!("Clossing session");
+pub extern "C" fn RUSTEE_OpenSession(
+    _param_types: u32,
+    _params: &mut [TEE_Param; 4],
+    _session_context: *const u8,
+) -> u32 {
+    trace!("Opening session");
+
+    0
+}
+
+#[no_mangle]
+pub extern "C" fn RUSTEE_CloseSession(_session_context: *const u8) -> () {
+    trace!("Closing session");
     close_session();
+}
+
+#[no_mangle]
+pub extern "C" fn RUSTEE_InvokeCommand(
+    _session_context: *const u8,
+    cmd_id: u32,
+    param_types: u32,
+    params: &mut [TEE_Param; 4],
+) -> u32 {
+    trace!("Invoked command");
+
+    super::invoke_command(cmd_id, param_types, params)
 }

@@ -9,6 +9,9 @@ use zondee_utee::wrapper::{
     ParamType, Parameters, TaErrorCode as Error,
 };
 
+/// This module contains the functions that will be called from the C library
+///
+/// The signature of the functions are found in the librustee_ta.h file
 mod optee;
 
 #[macro_use]
@@ -17,6 +20,9 @@ extern crate log;
 use core::convert::TryFrom;
 
 #[cfg(not(test))]
+/// This module is used to provide lang items needed but not normally available in the TEE
+///
+/// This is, for example, the `panic_handler`, the `global_allocator` and the `alloc_error_handler`
 mod lang_items {
     use core::panic::PanicInfo;
     use zondee_utee::wrapper::{utee_panic, TEEAllocator};
@@ -37,12 +43,7 @@ mod lang_items {
     }
 }
 
-#[no_mangle]
-pub extern "C" fn invoke_command(
-    cmd_id: u32,
-    param_types: u32,
-    parameters: &mut [TEE_Param; 4],
-) -> u32 {
+pub fn invoke_command(cmd_id: u32, param_types: u32, parameters: &mut [TEE_Param; 4]) -> u32 {
     let mut params = Parameters::from_raw(parameters, param_types);
 
     // This check would depend on the opretion defined by cmd_id
