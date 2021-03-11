@@ -12,7 +12,7 @@ on:
 env:
     SHARED_FOLDER: ${HOME}/qemu-shared-folder
     QEMU_V8: 1
-    OPTEE: ${HOME}/zxtestrunner/runner-storage/optee-qemuv8-3.12.0
+    OPTEE: ${HOME}/actions-runner/optee-qemuv8-3.12.0
 
 jobs:
     build:
