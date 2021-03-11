@@ -12,7 +12,6 @@ use zondee_teec::wrapper::{raw, Operation, Param, ParamNone, ParamTmpRef};
 
 extern "C" {
     fn invoke_optee_command(command_id: u32, op: *mut raw::TEEC_Operation) -> u32;
-    fn recover_panic();
 }
 
 pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
