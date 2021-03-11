@@ -1,0 +1,30 @@
+name: Build
+on:
+    # Triggers the workflow on push or pull request events but only for the master branch
+    push:
+        branches: [master]
+    pull_request:
+        branches: [master]
+
+    # So we can trigger manually
+    workflow_dispatch:
+
+env:
+    SHARED_FOLDER: ${HOME}/qemu-shared-folder
+    QEMU_V8: 1
+    OPTEE: ${HOME}/zxtestrunner/runner-storage/optee-qemuv8-3.12.0
+
+jobs:
+    build:
+        # Run this workflow in our optee self-hosted runner
+        runs-on: tee-ci
+
+        steps:
+            - uses: actions/checkout@v2
+              with:
+                  submodules: "true"
+
+            - run: mkdir -p $SHARED_FOLDER
+
+            - name: Build the application
+              run: make deps all
