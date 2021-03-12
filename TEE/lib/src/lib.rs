@@ -12,8 +12,6 @@ extern crate log;
 
 mod optee;
 
-use core::convert::TryFrom;
-
 #[cfg(not(test))]
 mod lang_items {
     use core::panic::PanicInfo;
@@ -35,11 +33,7 @@ mod lang_items {
     }
 }
 
-fn invoke_command(
-    cmd_id: u32,
-    param_types: u32,
-    parameters: &mut [TEE_Param; 4],
-) -> u32 {
+fn invoke_command(_cmd_id: u32, param_types: u32, parameters: &mut [TEE_Param; 4]) -> u32 {
     let mut params = Parameters::from_raw(parameters, param_types);
 
     // This check would depend on the opretion defined by cmd_id
@@ -80,7 +74,7 @@ fn invoke_command(
     //which is the echo command
 
     let input = imemref.buffer();
-    let mut out = omemref.buffer();
+    let out = omemref.buffer();
 
     if input.len() > out.len() {
         return Error::BadFormat as _;

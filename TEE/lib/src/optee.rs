@@ -1,4 +1,4 @@
-use zondee_utee::wrapper::{raw::TEE_Param, TEELogger, TaErrorCode as Error};
+use zondee_utee::wrapper::{raw::TEE_Param, TEELogger};
 
 //The signatures of the following functions are defined in the framework's rustee_ta.h file
 
