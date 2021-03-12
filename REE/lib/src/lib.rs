@@ -27,29 +27,41 @@ pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
     }
 }
 
+mod logic;
+
 #[no_mangle]
+#[cfg(not(feature = "ci"))]
 pub extern "C" fn run() -> u32 {
     env_logger::init(); //can use any logger impl if you want
 
     /* ****************
         Place your logic from here....
         You could do it directly in this crate or separate it out to another crate so it's easier to test
-        
+
         Below is some example code
     ****************** */
-    
+
     let msg = b"been to trusted and back";
-    
-    let mut out = vec![0u8; msg.len()];
 
-    let p0 = ParamTmpRef::new_input(&msg[..]);
-    let p1 = ParamTmpRef::new_output(&mut out[..]);
+    assert_eq!(logic::echo(msg), Ok(true));
+    0
+}
 
-    let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
-    if let Err(n) = invoke_command(0, &mut op) {
-        return n;
-    }
-    
-    assert_eq!(&msg[..], &out[..]);
+#[no_mangle]
+#[cfg(feature = "ci")]
+pub extern "C" fn run() -> u32 {
+    env_logger::init();
+    /*
+     * Here lies the code for your automated tests!
+     * */
+
+    info!("[RUSTEE TEST #0]: START");
+    let msg = b"hello ci";
+    let result = logic::echo(msg).expect("[RUSTEE TEST #0]: ERROR");
+    info!(
+        "[RUSTEE TEST #0]: {}",
+        if result { "SUCCESS" } else { "FAILURE" }
+    );
+
     0
 }

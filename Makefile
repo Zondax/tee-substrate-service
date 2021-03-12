@@ -19,6 +19,9 @@ deps:
 all:
 	$(MAKE) -C framework $@
 
+ci:
+	$(MAKE) -C framework $@
+
 copy:
 	$(MAKE) -C framework $@
 

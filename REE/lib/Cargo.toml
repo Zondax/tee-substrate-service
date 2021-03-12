@@ -10,6 +10,9 @@ resolver = "2"
 name = "rustee_host"
 crate-type = ["staticlib"]
 
+[features]
+ci = []
+
 [dependencies]
 zondee-teec = { version = "0.1.0", path = "../../framework/crates/zondee-teec"  }
 
