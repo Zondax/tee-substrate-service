@@ -51,6 +51,8 @@ pub extern "C" fn run() -> u32 {
 #[cfg(feature = "ci")]
 pub extern "C" fn run() -> u32 {
     env_logger::init();
+    info!("TESTS STARTING");
+
     /*
      * Here lies the code for your automated tests!
      * */
@@ -63,5 +65,6 @@ pub extern "C" fn run() -> u32 {
         if result { "SUCCESS" } else { "FAILURE" }
     );
 
+    info!("TESTS FINISHED");
     0
 }
