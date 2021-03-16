@@ -22,6 +22,9 @@ all:
 copy:
 	$(MAKE) -C framework $@
 
+ci:
+	$(MAKE) -C framework $@
+
 clean: cclean
 	$(MAKE) -C framework $@
 

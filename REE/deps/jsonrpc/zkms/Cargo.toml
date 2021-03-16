@@ -5,6 +5,9 @@ authors = ["becominginsane <francesco@zondax.ch>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+client = ["jsonrpc-core-client"]
+
 
 [dependencies]
 zkms-common = { version = "0.1", path = "../../zkms-common", features = ["serde_"] }
@@ -12,3 +15,4 @@ jsonrpc-derive = "17"
 jsonrpc-core = "17"
 derive_more = "0.99.11"
 hex = "0.4"
+jsonrpc-core-client = { version = "17", optional = true }

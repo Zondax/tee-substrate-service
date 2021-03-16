@@ -39,6 +39,8 @@ pub(crate) fn invoke_command<A: Param, B: Param, C: Param, D: Param>(
 
 #[no_mangle]
 pub extern "C" fn run() -> u32 {
+    const PORT: u16 = 39946;
+
     env_logger::init();
 
     //create tokio runtime for the application
@@ -51,10 +53,28 @@ pub extern "C" fn run() -> u32 {
     rt.block_on(async move {
         info!("starting jsonrpc service...");
         //start the service
-        let service = host_jsonrpc::start_service("0.0.0.0:39946").await;
+        let service = host_jsonrpc::start_service(("0.0.0.0", PORT)).await;
         info!("jsonrpc service started! forwarding to handler...");
+
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "ci")] {
+                let maybe_ci = ci::execute_tests(("localhost", PORT));
+            } else {
+                let maybe_ci = futures::future::pending::<()>();
+            }
+        }
+
         //call the host service that retrieves requests and handles them with the appropriate handler
-        host_app::start_service(service, optee_handler::Handler::default()).await;
+        let service = host_app::start_service(service, optee_handler::Handler::default());
+
+        futures::pin_mut!(maybe_ci);
+        futures::pin_mut!(service);
+
+        futures::future::select(maybe_ci, service).await;
+
         0
     })
 }
+
+#[cfg(feature = "ci")]
+mod ci;

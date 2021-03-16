@@ -8,7 +8,8 @@ use zkms_common::{
     RequestError,
 };
 
-#[rpc(server)]
+#[cfg_attr(feature = "client", rpc)]
+#[cfg_attr(not(feature = "client"), rpc(server))]
 pub trait ZKMS {
     #[rpc(name = "generateNew")]
     fn generate_new(&self, seed: Option<String>) -> BoxFuture<RpcResult<PublicKey>>;

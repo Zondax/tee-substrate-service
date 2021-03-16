@@ -166,24 +166,28 @@ where
 
 #[cfg(test)]
 mod tests {
+    use host_common::zkms_common::RequestError;
     use super::*;
-    use jsonrpc_test::Rpc;
 
-    fn get_test_handler() -> (Rpc, Receiver<ServiceRequest<RpcError>>) {
+    fn get_test_handler() -> (
+        jsonrpc_test::Rpc,
+        impl Stream<Item = Result<ServiceRequest<RpcError>, RpcError>>,
+    ) {
         let (handler, rx) = RpcHandler::new();
-        let rpc = Rpc::new(handler.to_delegate());
+        let rpc = jsonrpc_test::Rpc::new(handler.to_delegate());
 
-        (rpc, rx)
+        (rpc, rx.then(|req| async move { Ok(req) }))
     }
 
-    async fn handle_requests(rx: Receiver<ServiceRequest<RpcError>>) {
+    async fn handle_requests(
+        rx: impl Stream<Item = Result<ServiceRequest<RpcError>, RpcError>> + Send + 'static,
+    ) {
         tokio::spawn(async move {
             futures::pin_mut!(rx);
-            while let Some(srv_req) = rx.next().await {
+            while let Some(Ok(srv_req)) = rx.next().await {
                 info!("got a request: {:?}", srv_req);
-                let mut err = RpcError::internal_error();
-                err.message = "dummy".to_string();
-                srv_req.reply(Err(err)).await
+                let err = RequestError::from("dummy".to_string());
+                srv_req.reply(Err(err.into())).await
             }
         });
     }
