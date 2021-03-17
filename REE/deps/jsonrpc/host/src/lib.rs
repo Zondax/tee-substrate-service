@@ -16,7 +16,9 @@ use host_common::{
     zkms_common::schnorrkel::{PublicKey, Signature},
     RequestMethod, RequestResponse, ServiceRequest,
 };
-use zkms_jsonrpc::{ErrorWrapper as RpcError, ZKMS};
+use zkms_jsonrpc::{
+    ErrorWrapper as RpcError, PublicKey as ZKMSPublicKey, Signature as ZKMSSignature, ZKMS,
+};
 
 /// prepares the IoHandler with the Rpc impl
 fn get_io_handler<E: Into<RpcError> + Send + 'static>() -> (IoHandler, Receiver<ServiceRequest<E>>)
@@ -139,35 +141,52 @@ impl<E> ZKMS for RpcHandler<E>
 where
     E: Into<RpcError> + Send + 'static,
 {
-    fn generate_new(&self, seed: Option<String>) -> BoxFuture<RpcResult<PublicKey>> {
+    fn generate_new(&self, seed: Option<String>) -> BoxFuture<RpcResult<ZKMSPublicKey>> {
         info!("generate new requested");
-        Box::pin(
-            self.generate_new_impl(seed)
-                .map(|k| k.map_err(Into::into).map_err(Into::into)),
-        )
+        Box::pin(self.generate_new_impl(seed).map(|r| {
+            r.map(|key| key.to_bytes())
+                .map_err(Into::into)
+                .map_err(Into::into)
+        }))
     }
 
-    fn get_public_keys(&self) -> BoxFuture<RpcResult<Vec<PublicKey>>> {
+    fn get_public_keys(&self) -> BoxFuture<RpcResult<Vec<ZKMSPublicKey>>> {
         info!("get public keys requested");
-        Box::pin(
-            self.get_public_keys_impl()
-                .map(|k| k.map_err(Into::into).map_err(Into::into)),
-        )
+        //keys.into_iter().map(|k| k.to_bytes()).collect()
+        Box::pin(self.get_public_keys_impl().map(|r| {
+            r.map(|ks| ks.into_iter().map(|k| k.to_bytes()).collect())
+                .map_err(Into::into)
+                .map_err(Into::into)
+        }))
     }
 
-    fn sign_message(&self, public_key: PublicKey, msg: Vec<u8>) -> BoxFuture<RpcResult<Signature>> {
+    fn sign_message(
+        &self,
+        public_key: ZKMSPublicKey,
+        msg: Vec<u8>,
+    ) -> BoxFuture<RpcResult<ZKMSSignature>> {
         info!("sign requested");
-        Box::pin(
-            self.sign_message_impl(public_key, msg)
-                .map(|k| k.map_err(Into::into).map_err(Into::into)),
-        )
+
+        let public_key = PublicKey::from_bytes(&public_key)
+            .map_err(|e| host_common::zkms_common::RequestError::InternalError(e.to_string()))
+            .map_err(|e| RpcError::from(e))
+            .map_err(Into::into);
+
+        match public_key {
+            Ok(public_key) => Box::pin(self.sign_message_impl(public_key, msg).map(|r| {
+                r.map(|s| s.to_bytes().to_vec())
+                    .map_err(Into::into)
+                    .map_err(Into::into)
+            })),
+            Err(e) => Box::pin(async move { return Err(e) }),
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use host_common::zkms_common::RequestError;
     use super::*;
+    use host_common::zkms_common::RequestError;
 
     fn get_test_handler() -> (
         jsonrpc_test::Rpc,

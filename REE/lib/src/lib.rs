@@ -46,6 +46,7 @@ pub extern "C" fn run() -> u32 {
     //create tokio runtime for the application
     let mut rt = tokio::runtime::Builder::new()
         .basic_scheduler()
+        .enable_time()
         .enable_io()
         .build()
         .expect("unable to initialize tokio runtime");
@@ -64,8 +65,11 @@ pub extern "C" fn run() -> u32 {
             }
         }
 
-        //call the host service that retrieves requests and handles them with the appropriate handler
-        let service = host_app::start_service(service, optee_handler::Handler::default());
+        //spawn the host service that retrieves requests and handles them with the appropriate handler
+        let service = tokio::spawn(host_app::start_service(
+            service,
+            optee_handler::Handler::default(),
+        ));
 
         futures::pin_mut!(maybe_ci);
         futures::pin_mut!(service);

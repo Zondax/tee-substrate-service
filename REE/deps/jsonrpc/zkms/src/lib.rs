@@ -3,10 +3,12 @@
 use jsonrpc_core::{BoxFuture, Error as RpcError, Result as RpcResult};
 use jsonrpc_derive::rpc;
 
-use zkms_common::{
-    schnorrkel::{PublicKey, Signature},
-    RequestError,
-};
+use zkms_common::{schnorrkel::PUBLIC_KEY_LENGTH, RequestError};
+
+//TEMPORARY
+// see https://github.com/w3f/schnorrkel/issues/66
+pub type PublicKey = [u8; PUBLIC_KEY_LENGTH];
+pub type Signature = Vec<u8>;
 
 #[cfg_attr(feature = "client", rpc)]
 #[cfg_attr(not(feature = "client"), rpc(server))]
@@ -18,6 +20,9 @@ pub trait ZKMS {
     fn get_public_keys(&self) -> BoxFuture<RpcResult<Vec<PublicKey>>>;
 
     #[rpc(name = "signMessage")]
+    /// Signs a message with the matching private key to the public key
+    ///
+    /// context is "zondax"
     fn sign_message(&self, public_key: PublicKey, msg: Vec<u8>) -> BoxFuture<RpcResult<Signature>>;
 }
 

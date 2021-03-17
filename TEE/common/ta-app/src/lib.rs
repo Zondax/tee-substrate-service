@@ -214,13 +214,9 @@ mod tests {
 
     impl<'r> TaApp<'r> {
         fn set_keys(&mut self, keypairs: &[&Keypair]) {
-            let keys: Vec<_> = keypairs
-                .iter()
-                .take(self.keys.len())
-                .map(|k| (*k).clone())
-                .collect();
+            let keys: Vec<_> = keypairs.iter().map(|k| (*k).clone()).collect();
 
-            self.keys.clone_from_slice(keys.as_slice());
+            self.keys = keys;
         }
     }
 

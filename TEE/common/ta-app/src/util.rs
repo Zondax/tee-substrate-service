@@ -1,3 +1,5 @@
+use std::prelude::v1::*;
+
 use optee_common::TeeErrorCode as Error;
 use rand_core::{CryptoRng, RngCore};
 
@@ -5,7 +7,7 @@ use rand_core::{CryptoRng, RngCore};
 pub trait CSPRNG: CryptoRng + RngCore {}
 impl<R: CryptoRng + RngCore> CSPRNG for R {}
 
-const U64_SIZE: usize = core::mem::size_of::<u64>();
+const U64_SIZE: usize = std::mem::size_of::<u64>();
 
 /// Reads an u64 from the slice, advancing it
 pub fn read_and_advance_u64(slice: &mut &[u8]) -> Result<u64, Error> {
@@ -46,10 +48,7 @@ pub fn advance_slice(slice: &mut &[u8], amt: usize) -> Result<(), Error> {
 
 #[cfg(test)]
 mod tests {
-    extern crate std;
-
     use super::*;
-    use std::vec;
 
     #[test]
     fn read_u64() {
