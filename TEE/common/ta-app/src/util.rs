@@ -74,13 +74,20 @@ pub mod sign {
     use merlin::Transcript;
     use schnorrkel::{context::SigningTranscriptWithRng, PublicKey, SecretKey, Signature};
 
+    /// Creates a `Transcript` with the given CSPRNG
+    ///
+    /// This transcript construction matches otherwise `schnorrkel`'s
+    /// `SigningContext`
     pub fn get_transcript<R: CryptoRng + RngCore>(
         rng: R,
         ctx: &[u8],
         msg: &[u8],
     ) -> SigningTranscriptWithRng<Transcript, R> {
-        let mut t = Transcript::new(b"ta_app::util::signing_transcript");
+        //must match `schnorrkel`'s to allow easy verification
+        //SigningContext::new
+        let mut t = Transcript::new(b"SigningContext");
         t.append_message(b"", ctx);
+        //SigningContext::bytes
         t.append_message(b"sign-bytes", msg);
 
         schnorrkel::context::attach_rng(t, rng)
