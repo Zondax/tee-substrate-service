@@ -5,10 +5,15 @@ authors = ["becominginsane <francesco@zondax.ch>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[features]
+self-tokio = ["tokio/rt-core", "once_cell"]
+default = ["self-tokio"]
 
 [dependencies]
 zkms-jsonrpc = { version = "0.1", path = "../../REE/deps/jsonrpc/zkms", features = ["client"] }
 jsonrpc-core-client = { version = "17", features = ["http"] }
+tokio = { version = "0.2", features = ["tcp", "dns", "time"] }
+once_cell = { version = "1", optional = true }
 
 sp-core = "3.0.0"
 sp-keystore = "0.9.0"
