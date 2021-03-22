@@ -1,0 +1,16 @@
+[package]
+name = "tee-keystore"
+version = "0.1.0"
+authors = ["becominginsane <francesco@zondax.ch>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+zkms-jsonrpc = { version = "0.1", path = "../../REE/deps/jsonrpc/zkms", features = ["client"] }
+jsonrpc-core-client = { version = "17", features = ["http"] }
+
+sp-core = "3.0.0"
+sp-keystore = "0.9.0"
+sc-keystore = "3.0.0"
+async-trait = "0.1.48"
