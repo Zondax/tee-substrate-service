@@ -66,8 +66,8 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                         //store keypair
                         self.keys.push(keypair);
                     }
-                    len => {
-                        todo!("private key with seed")
+                    _ => {
+                        todo!("return error, api meant to NOT be supported")
                     }
                 }
 
