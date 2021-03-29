@@ -4,6 +4,9 @@ use sp_core::{
 };
 use sp_keystore::SyncCryptoStore;
 use tokio::runtime::Handle;
+use tokio::sync::RwLock;
+
+use zkms_jsonrpc::ZKMSClient;
 
 #[macro_use]
 extern crate tracing;
@@ -12,9 +15,11 @@ extern crate tracing;
 ///
 /// Talks to a zondax keystore via jsonrpc
 pub struct TEEKeystore {
-    handle: zkms_jsonrpc::ZKMSClient,
+    client: RwLock<Option<ZKMSClient>>,
     /// Used for functionality not provided in ZKMSClient
     fallback: sc_keystore::LocalKeystore,
+
+    url: url::Url,
 
     /// Handle to the tokio runtime
     runtime: Handle,
@@ -27,10 +32,25 @@ impl std::fmt::Debug for TEEKeystore {
 }
 
 impl TEEKeystore {
+    pub async fn connect(&self) -> jsonrpc_core_client::RpcResult<()> {
+        if self.client.read().await.as_ref().is_none() {
+            debug!("creating new connection to TEE keystore");
+            let handle =
+                jsonrpc_core_client::transports::http::connect(self.url.to_string().as_str())
+                    .await?;
+
+            self.client.write().await.replace(handle);
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
     #[instrument]
-    pub async fn new(url: &str) -> jsonrpc_core_client::RpcResult<Self> {
-        debug!("creating new connection to TEE keystore");
-        let handle = jsonrpc_core_client::transports::http::connect(&url).await?;
+    pub fn deferred(url: &str) -> Result<Self, String> {
+        let url = url
+            .parse()
+            .map_err(|e| format!("cannot parse url: {:?}", e))?;
 
         debug!("creating fallback keystore");
         let fallback = sc_keystore::LocalKeystore::in_memory();
@@ -38,10 +58,10 @@ impl TEEKeystore {
         debug!("retrieving tokio runtime handle");
         let runtime = tokio::runtime::Handle::current();
 
-        debug!("got hanlde, returning Self");
         Ok(Self {
-            handle,
+            client: RwLock::default(),
             fallback,
+            url,
             runtime,
         })
     }
@@ -60,14 +80,23 @@ impl TEEKeystore {
         let handle = tokio::runtime::Handle::try_current();
         let handle = (&handle.as_ref()).unwrap_or_else(|_| RUNTIME.handle());
 
-        execute_fut(Self::new(url), handle)
+        let me = Self::deferred(url).map_err(jsonrpc_core_client::RpcError::Client)?;
+        execute_fut(me.connect(), handle)?;
+        Ok(me)
     }
 }
 
 impl TEEKeystore {
+    async fn client(&self) -> tokio::sync::RwLockReadGuard<'_, ZKMSClient>{
+        self.connect().await;
+        let lock = self.client.read().await;
+        tokio::sync::RwLockReadGuard::map(lock, |o| o.as_ref().unwrap())
+    }
+
     #[instrument]
     async fn sr25519_public_keys_impl(&self, _: KeyTypeId) -> Vec<sr25519::Public> {
-        let keys = self.handle.get_public_keys().await.unwrap_or_default();
+        let client = self.client().await;
+        let keys = client.get_public_keys().await.unwrap_or_default();
         keys.into_iter()
             .map(|k| sr25519::Public::from_raw(k))
             .collect()
@@ -79,7 +108,8 @@ impl TEEKeystore {
         _: KeyTypeId,
         seed: Option<&str>,
     ) -> Result<sr25519::Public, sp_keystore::Error> {
-        self.handle
+        let client = self.client().await;
+        client
             .generate_new(seed.map(|s| s.to_string()))
             .await
             .map_err(|_| sp_keystore::Error::Unavailable)
@@ -115,12 +145,7 @@ impl TEEKeystore {
     }
 
     #[instrument]
-    fn insert_unknown_impl(
-        &self,
-        id: KeyTypeId,
-        suri: &str,
-        public: &[u8],
-    ) -> Result<(), ()> {
+    fn insert_unknown_impl(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
         self.fallback.insert_unknown(id, suri, public)
     }
 
@@ -134,10 +159,7 @@ impl TEEKeystore {
     }
 
     #[instrument]
-    fn keys_impl(
-        &self,
-        id: KeyTypeId,
-    ) -> Result<Vec<CryptoTypePublicPair>, sp_keystore::Error> {
+    fn keys_impl(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, sp_keystore::Error> {
         self.fallback.keys(id)
     }
 
@@ -153,13 +175,15 @@ impl TEEKeystore {
         key: &CryptoTypePublicPair,
         msg: &[u8],
     ) -> Result<Vec<u8>, sp_keystore::Error> {
+        let client = self.client().await;
+
         let key = {
             let mut array = [0u8; 32];
             array.copy_from_slice(&key.1[..32]);
             array
         };
 
-        self.handle
+        client
             .sign_message(key, msg.to_vec())
             .await
             .map_err(|_| sp_keystore::Error::Unavailable)
