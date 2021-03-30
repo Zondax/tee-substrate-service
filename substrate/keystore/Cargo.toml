@@ -14,7 +14,7 @@ zkms-jsonrpc = { version = "0.1", path = "../../REE/deps/jsonrpc/zkms", features
 jsonrpc-core-client = { version = "17", features = ["http"] }
 tokio = { version = "0.2", features = ["tcp", "dns", "time", "sync"] }
 once_cell = { version = "1", optional = true }
-futures = { version = "0.3", features = ["executor"] }
+futures = { version = "0.3" }
 url = "2.2.1"
 
 tracing = "0.1"

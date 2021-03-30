@@ -56,7 +56,7 @@ impl TEEKeystore {
         let fallback = sc_keystore::LocalKeystore::in_memory();
 
         debug!("retrieving tokio runtime handle");
-        let runtime = tokio::runtime::Handle::current();
+        let runtime = Handle::current();
 
         Ok(Self {
             client: RwLock::default(),

@@ -7,7 +7,5 @@ where
     T: Send,
     F: Future<Output = T> + Send,
 {
-    debug!("haha gonna block onto a future... freezing everything in 3, 2, 1...");
-    //handle.block_on(f)
-    futures::executor::block_on(f)
+    handle.block_on(f)
 }
