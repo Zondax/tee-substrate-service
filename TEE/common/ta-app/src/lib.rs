@@ -196,10 +196,9 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
     TA_HANDLER.0.borrow()
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(feature = "std")]
+mod std_feature {
     use super::*;
-    use optee_common::Serialize;
 
     impl Default for TaApp<'static> {
         fn default() -> Self {
@@ -211,6 +210,12 @@ mod tests {
             }
         }
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use optee_common::Serialize;
 
     impl<'r> TaApp<'r> {
         fn set_keys(&mut self, keypairs: &[&Keypair]) {

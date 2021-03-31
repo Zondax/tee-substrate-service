@@ -4,11 +4,15 @@ version = "0.1.0"
 authors = ["becominginsane <francesco@zondax.ch>"]
 edition = "2018"
 
+[features]
+std = ["rand", "rand_core/std", "no-std-compat/std"]
+
 [dependencies]
 optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
 log = "0.4"
 rand_core = "0.6"
 no-std-compat = { version = "0.4.1", features = ["alloc"] }
+rand = { version = "0.8", optional = true }
 
 #crypto
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }

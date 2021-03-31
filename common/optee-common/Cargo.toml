@@ -7,6 +7,7 @@ edition = "2018"
 [features]
 default = []
 alloc = ["no-std-compat/alloc"]
+fuzzing = ["arbitrary"]
 
 [lib]
 name = "optee_common"
@@ -15,3 +16,5 @@ crate-type = ["rlib"]
 [dependencies]
 no-std-compat = "0.4.1"
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
+
+arbitrary = { version = "1", features = ["derive"], optional = true }

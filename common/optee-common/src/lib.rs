@@ -9,6 +9,7 @@ mod tee_error;
 pub use tee_error::{TeeError, TeeErrorCode};
 
 #[derive(Debug, Copy, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[repr(u32)]
 pub enum CommandId {
     GenerateNew,
