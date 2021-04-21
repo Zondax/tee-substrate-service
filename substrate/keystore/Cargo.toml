@@ -4,23 +4,18 @@ version = "0.1.0"
 authors = ["becominginsane <francesco@zondax.ch>"]
 edition = "2018"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[features]
-self-tokio = ["tokio/rt-core", "once_cell"]
-default = ["self-tokio"]
-
 [dependencies]
-zkms-jsonrpc = { version = "0.1", path = "../../REE/deps/jsonrpc/zkms", features = ["client"] }
-jsonrpc-core-client = { version = "17", features = ["http"] }
+zkms-ductile = { version = "0.1", path = "../../REE/deps/ductile/zkms" }
+ductile = { version = "0.1", git = "https://github.com/becominginsane/ductile" }
+
 tokio = { version = "0.2", features = ["tcp", "dns", "time", "sync"] }
-once_cell = { version = "1", optional = true }
-futures = { version = "0.3" }
+parking_lot = { version = "0.11" }
+
 url = "2.2.1"
 
 tracing = "0.1"
-tracing-futures = "0.2"
 
 sp-core = "3.0.0"
 sc-keystore = "3.0.0"
 sp-keystore = "0.9.0"
-async-trait = "0.1.48"
+async-trait = "0.1.47"

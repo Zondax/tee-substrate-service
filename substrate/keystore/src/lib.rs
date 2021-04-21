@@ -1,23 +1,25 @@
+use parking_lot::RwLock;
 use sp_core::{
     crypto::{CryptoTypePublicPair, KeyTypeId},
     ecdsa, ed25519, sr25519,
 };
-use sp_keystore::SyncCryptoStore;
+use sp_keystore::Error;
 use tokio::runtime::Handle;
-use tokio::sync::RwLock;
-
-use zkms_jsonrpc::ZKMSClient;
+use zkms_ductile::{RemoteKeystore, RemoteKeystoreResponse};
 
 #[macro_use]
 extern crate tracing;
+
+struct ZKMSClient {
+    pub tx: ductile::ChannelSender<RemoteKeystore>,
+    pub rx: ductile::ChannelReceiver<RemoteKeystoreResponse>,
+}
 
 /// A remote keystore
 ///
 /// Talks to a zondax keystore via jsonrpc
 pub struct TEEKeystore {
     client: RwLock<Option<ZKMSClient>>,
-    /// Used for functionality not provided in ZKMSClient
-    fallback: sc_keystore::LocalKeystore,
 
     url: url::Url,
 
@@ -32,14 +34,13 @@ impl std::fmt::Debug for TEEKeystore {
 }
 
 impl TEEKeystore {
-    pub async fn connect(&self) -> jsonrpc_core_client::RpcResult<()> {
-        if self.client.read().await.as_ref().is_none() {
+    pub fn connect(&self) -> ductile::Result<()> {
+        if self.client.read().as_ref().is_none() {
             debug!("creating new connection to TEE keystore");
-            let handle =
-                jsonrpc_core_client::transports::http::connect(self.url.to_string().as_str())
-                    .await?;
+            let (tx, rx) = ductile::connect_channel(self.url.to_string().as_str())?;
 
-            self.client.write().await.replace(handle);
+            let handle = ZKMSClient { tx, rx };
+            self.client.write().replace(handle);
             Ok(())
         } else {
             Ok(())
@@ -52,152 +53,405 @@ impl TEEKeystore {
             .parse()
             .map_err(|e| format!("cannot parse url: {:?}", e))?;
 
-        debug!("creating fallback keystore");
-        let fallback = sc_keystore::LocalKeystore::in_memory();
-
         debug!("retrieving tokio runtime handle");
         let runtime = Handle::current();
 
         Ok(Self {
             client: RwLock::default(),
-            fallback,
             url,
             runtime,
         })
     }
 }
 
-mod scope;
-use scope::execute_fut;
-
-#[cfg(feature = "self-tokio")]
-static RUNTIME: once_cell::sync::Lazy<tokio::runtime::Runtime> =
-    once_cell::sync::Lazy::new(|| tokio::runtime::Builder::new().enable_all().build().unwrap());
-
-#[cfg(feature = "self-tokio")]
 impl TEEKeystore {
-    pub fn new_sync(url: &str) -> jsonrpc_core_client::RpcResult<Self> {
-        let handle = tokio::runtime::Handle::try_current();
-        let handle = (&handle.as_ref()).unwrap_or_else(|_| RUNTIME.handle());
-
-        let me = Self::deferred(url).map_err(jsonrpc_core_client::RpcError::Client)?;
-        execute_fut(me.connect(), handle)?;
-        Ok(me)
-    }
-}
-
-impl TEEKeystore {
-    async fn client(&self) -> tokio::sync::RwLockReadGuard<'_, ZKMSClient>{
-        self.connect().await;
-        let lock = self.client.read().await;
-        tokio::sync::RwLockReadGuard::map(lock, |o| o.as_ref().unwrap())
+    fn client(&self) -> parking_lot::RwLockReadGuard<'_, Option<ZKMSClient>> {
+        self.connect();
+        self.client.read()
     }
 
     #[instrument]
-    async fn sr25519_public_keys_impl(&self, _: KeyTypeId) -> Vec<sr25519::Public> {
-        let client = self.client().await;
-        let keys = client.get_public_keys().await.unwrap_or_default();
-        keys.into_iter()
-            .map(|k| sr25519::Public::from_raw(k))
-            .collect()
+    fn sr25519_public_keys(&self, id: KeyTypeId) -> Vec<sr25519::Public> {
+        let client = self.client();
+        let client = match client.as_ref() {
+            Some(client) => client,
+            None => return vec![],
+        };
+
+        match client.tx.send(RemoteKeystore::Sr25519PublicKeys(id)) {
+            Err(_) => vec![],
+            Ok(_) => client
+                .rx
+                .recv()
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Sr25519PublicKeys(resp) = resp {
+                        Ok(resp)
+                    } else {
+                        //unreachable!()
+                        Ok(vec![])
+                    }
+                })
+                .or_else::<(), _>(|_| Ok(vec![]))
+                .unwrap(),
+        }
     }
 
     #[instrument]
-    async fn sr25519_generate_new_impl(
-        &self,
-        _: KeyTypeId,
-        seed: Option<&str>,
-    ) -> Result<sr25519::Public, sp_keystore::Error> {
-        let client = self.client().await;
-        client
-            .generate_new(seed.map(|s| s.to_string()))
-            .await
-            .map_err(|_| sp_keystore::Error::Unavailable)
-            .map(|k| sr25519::Public::from_raw(k))
-    }
-
-    #[instrument]
-    fn ed25519_public_keys_impl(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
-        self.fallback.ed25519_public_keys(id)
-    }
-
-    #[instrument]
-    fn ed25519_generate_new_impl(
+    fn sr25519_generate_new(
         &self,
         id: KeyTypeId,
         seed: Option<&str>,
-    ) -> Result<ed25519::Public, sp_keystore::Error> {
-        self.fallback.ed25519_generate_new(id, seed)
+    ) -> Result<sr25519::Public, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::Sr25519GenerateNew {
+            id,
+            seed: seed.map(|s| s.to_string()),
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Sr25519GenerateNew(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
     }
 
     #[instrument]
-    fn ecdsa_public_keys_impl(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
-        self.fallback.ecdsa_public_keys(id)
+    fn ed25519_public_keys(&self, id: KeyTypeId) -> Vec<ed25519::Public> {
+        let client = self.client();
+        let client = match client.as_ref() {
+            Some(client) => client,
+            None => return vec![],
+        };
+
+        match client.tx.send(RemoteKeystore::Ed25519PublicKeys(id)) {
+            Err(_) => vec![],
+            Ok(_) => client
+                .rx
+                .recv()
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Ed25519PublicKeys(resp) = resp {
+                        Ok(resp)
+                    } else {
+                        //unreachable!()
+                        Ok(vec![])
+                    }
+                })
+                .or_else::<(), _>(|_| Ok(vec![]))
+                .unwrap(),
+        }
     }
 
     #[instrument]
-    fn ecdsa_generate_new_impl(
+    fn ed25519_generate_new(
         &self,
         id: KeyTypeId,
         seed: Option<&str>,
-    ) -> Result<ecdsa::Public, sp_keystore::Error> {
-        self.fallback.ecdsa_generate_new(id, seed)
+    ) -> Result<ed25519::Public, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::Ed25519GenerateNew {
+            id,
+            seed: seed.map(|s| s.to_string()),
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Ed25519GenerateNew(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
     }
 
     #[instrument]
-    fn insert_unknown_impl(&self, id: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
-        self.fallback.insert_unknown(id, suri, public)
+    fn ecdsa_public_keys(&self, id: KeyTypeId) -> Vec<ecdsa::Public> {
+        let client = self.client();
+        let client = match client.as_ref() {
+            Some(client) => client,
+            None => return vec![],
+        };
+
+        match client.tx.send(RemoteKeystore::EcdsaPublicKeys(id)) {
+            Err(_) => vec![],
+            Ok(_) => client
+                .rx
+                .recv()
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::EcdsaPublicKeys(resp) = resp {
+                        Ok(resp)
+                    } else {
+                        //unreachable!()
+                        Ok(vec![])
+                    }
+                })
+                .or_else::<(), _>(|_| Ok(vec![]))
+                .unwrap(),
+        }
     }
 
     #[instrument]
-    fn supported_keys_impl(
+    fn ecdsa_generate_new(
+        &self,
+        id: KeyTypeId,
+        seed: Option<&str>,
+    ) -> Result<ecdsa::Public, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::EcdsaGenerateNew {
+            id,
+            seed: seed.map(|s| s.to_string()),
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::EcdsaGenerateNew(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
+    }
+
+    #[instrument]
+    fn insert_unknown(&self, key_type: KeyTypeId, suri: &str, public: &[u8]) -> Result<(), ()> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(())?;
+
+        match client.tx.send(RemoteKeystore::InsertUnknown {
+            id: key_type,
+            suri: suri.to_string(),
+            public: Vec::from(public),
+        }) {
+            Err(_) => Err(()),
+            Ok(_) => client.rx.recv().map_err(|_| ()).and_then(|resp| {
+                if let RemoteKeystoreResponse::InsertUnknown(resp) = resp {
+                    resp
+                } else {
+                    //unreachable!()
+                    Err(())
+                }
+            }),
+        }
+    }
+
+    #[instrument]
+    fn supported_keys(
         &self,
         id: KeyTypeId,
         keys: Vec<CryptoTypePublicPair>,
-    ) -> Result<Vec<CryptoTypePublicPair>, sp_keystore::Error> {
-        self.fallback.supported_keys(id, keys)
+    ) -> Result<Vec<CryptoTypePublicPair>, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::SupportedKeys { id, keys }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::SupportedKeys(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
     }
 
     #[instrument]
-    fn keys_impl(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, sp_keystore::Error> {
-        self.fallback.keys(id)
+    fn keys(&self, id: KeyTypeId) -> Result<Vec<CryptoTypePublicPair>, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::Keys(id)) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Keys(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
     }
 
     #[instrument]
-    fn has_keys_impl(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
-        self.fallback.has_keys(public_keys)
-    }
-
-    #[instrument]
-    async fn sign_with_impl(
-        &self,
-        _: KeyTypeId,
-        key: &CryptoTypePublicPair,
-        msg: &[u8],
-    ) -> Result<Vec<u8>, sp_keystore::Error> {
-        let client = self.client().await;
-
-        let key = {
-            let mut array = [0u8; 32];
-            array.copy_from_slice(&key.1[..32]);
-            array
+    fn has_keys(&self, public_keys: &[(Vec<u8>, KeyTypeId)]) -> bool {
+        let client = self.client();
+        let client = match client.as_ref() {
+            Some(c) => c,
+            None => return false,
         };
 
-        client
-            .sign_message(key, msg.to_vec())
-            .await
-            .map_err(|_| sp_keystore::Error::Unavailable)
+        match client
+            .tx
+            .send(RemoteKeystore::HasKeys(public_keys.to_vec()))
+        {
+            Err(_) => false,
+            Ok(_) => client
+                .rx
+                .recv()
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::HasKeys(resp) = resp {
+                        Ok(resp)
+                    } else {
+                        //unreachable!()
+                        Ok(false)
+                    }
+                })
+                .or_else::<(), _>(|_| Ok(false))
+                .unwrap(),
+        }
     }
 
-    #[instrument(skip(transcript_data))]
-    fn sr25519_vrf_sign_impl(
+    #[instrument]
+    fn sign_with(
+        &self,
+        id: KeyTypeId,
+        key: &CryptoTypePublicPair,
+        msg: &[u8],
+    ) -> Result<Vec<u8>, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::SignWith {
+            id,
+            key: key.clone(),
+            msg: msg.to_vec(),
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::SignWith(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
+    }
+
+    #[instrument]
+    fn sign_with_any(
+        &self,
+        id: KeyTypeId,
+        keys: Vec<CryptoTypePublicPair>,
+        msg: &[u8],
+    ) -> Result<(CryptoTypePublicPair, Vec<u8>), Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::SignWithAny {
+            id,
+            keys,
+            msg: msg.to_vec(),
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::SignWithAny(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
+    }
+
+    #[instrument]
+    fn sign_with_all(
+        &self,
+        id: KeyTypeId,
+        keys: Vec<CryptoTypePublicPair>,
+        msg: &[u8],
+    ) -> Result<Vec<Result<Vec<u8>, Error>>, ()> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(())?;
+
+        match client.tx.send(RemoteKeystore::SignWithAll {
+            id,
+            keys,
+            msg: msg.to_vec(),
+        }) {
+            Err(_) => Err(()),
+            Ok(_) => client.rx.recv().map_err(|_| ()).and_then(|resp| {
+                if let RemoteKeystoreResponse::SignWithAll(resp) = resp {
+                    resp
+                } else {
+                    //unreachable!()
+                    Err(())
+                }
+            }),
+        }
+    }
+
+    #[instrument]
+    fn sr25519_vrf_sign(
         &self,
         key_type: KeyTypeId,
         public: &sr25519::Public,
         transcript_data: sp_keystore::vrf::VRFTranscriptData,
-    ) -> Result<sp_keystore::vrf::VRFSignature, sp_keystore::Error> {
-        self.fallback
-            .sr25519_vrf_sign(key_type, public, transcript_data)
+    ) -> Result<sp_keystore::vrf::VRFSignature, Error> {
+        let client = self.client();
+        let client = client.as_ref().ok_or(Error::Unavailable)?;
+
+        match client.tx.send(RemoteKeystore::Sr25519VrfSign {
+            key_type,
+            public: *public,
+            transcript_data,
+        }) {
+            Err(_) => Err(Error::Unavailable),
+            Ok(_) => client
+                .rx
+                .recv()
+                .map_err(|_| Error::Unavailable)
+                .and_then(|resp| {
+                    if let RemoteKeystoreResponse::Sr25519VrfSign(resp) = resp {
+                        resp
+                    } else {
+                        //unreachable!()
+                        Err(Error::Unavailable)
+                    }
+                }),
+        }
     }
 }
 

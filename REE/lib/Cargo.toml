@@ -30,10 +30,9 @@ zondee-teec = { version = "0.1.0", path = "../../framework/crates/zondee-teec" }
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 
 tokio = { version = "0.2", features = ["rt-threaded", "dns"] }
-host-jsonrpc = { version = "0.1", path = "../deps/jsonrpc/host" }
+host-ductile = { version = "0.1", path = "../deps/ductile/host" }
 futures = { version = "0.3" }
 
 #ci
-jsonrpc-core-client = { version = "17", features = ["http"], optional = true }
-zkms-jsonrpc = { version = "0.1", path = "../deps/jsonrpc/zkms", features = ["client"], optional = true }
+zkms-ductile = { version = "0.1", path = "../deps/ductile/zkms", optional = true }
 cfg-if = "1"

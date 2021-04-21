@@ -8,7 +8,6 @@ edition = "2018"
 [features]
 client = ["jsonrpc-core-client"]
 
-
 [dependencies]
 zkms-common = { version = "0.1", path = "../../zkms-common", features = ["serde_"] }
 jsonrpc-derive = "17"

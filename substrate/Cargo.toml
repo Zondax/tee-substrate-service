@@ -1,2 +1,7 @@
 [workspace]
 members = ["keystore"]
+
+[patch.crates-io]
+sp-core = { path = "libs/primitives/core" }
+sp-keystore = { path = "libs/primitives/keystore" }
+sc-keystore = { path = "libs/client/keystore" }

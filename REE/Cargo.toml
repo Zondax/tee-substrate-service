@@ -1,7 +1,8 @@
  [workspace]
  members = ["lib", "common/host-app",
             "deps/host-common", "deps/zkms-common",
-            "deps/jsonrpc/host", "deps/jsonrpc/zkms"
+            "deps/jsonrpc/host", "deps/jsonrpc/zkms",
+            "deps/ductile/host", "deps/ductile/zkms"
             ]
  
  resolver = "2"

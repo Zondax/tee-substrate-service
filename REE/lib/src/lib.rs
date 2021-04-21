@@ -52,10 +52,10 @@ pub extern "C" fn run() -> u32 {
         .expect("unable to initialize tokio runtime");
 
     rt.block_on(async move {
-        info!("starting jsonrpc service...");
+        info!("starting ductile service...");
         //start the service
-        let service = host_jsonrpc::start_service(("0.0.0.0", PORT)).await;
-        info!("jsonrpc service started! forwarding to handler...");
+        let service = host_ductile::start_service(("0.0.0.0", PORT)).await;
+        info!("ductile service started! forwarding to handler...");
 
         cfg_if::cfg_if! {
             if #[cfg(feature = "ci")] {
