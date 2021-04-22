@@ -1,15 +1,17 @@
-use sp_core::{
-    crypto::{CryptoTypePublicPair, KeyTypeId},
-    ecdsa, ed25519, sr25519,
+pub use sp_core::{crypto, ecdsa, ed25519, sr25519};
+pub use sp_keystore::{
+    vrf::{VRFSignature, VRFTranscriptData},
+    Error as KeystoreError,
 };
-use sp_keystore::{Error, vrf::{VRFSignature, VRFTranscriptData}};
 
-use serde::{Serialize, Deserialize};
+use sp_core::crypto::{CryptoTypePublicPair, KeyTypeId};
+
+use serde::{Deserialize, Serialize};
 
 #[macro_use]
 extern crate tracing;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RemoteKeystore {
     Sr25519PublicKeys(KeyTypeId),
     Sr25519GenerateNew {
@@ -40,7 +42,7 @@ pub enum RemoteKeystore {
     SignWith {
         id: KeyTypeId,
         key: CryptoTypePublicPair,
-        msg: Vec<u8>
+        msg: Vec<u8>,
     },
     SignWithAny {
         id: KeyTypeId,
@@ -56,23 +58,23 @@ pub enum RemoteKeystore {
         key_type: KeyTypeId,
         public: sr25519::Public,
         transcript_data: VRFTranscriptData,
-    }
+    },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum RemoteKeystoreResponse {
     Sr25519PublicKeys(Vec<sr25519::Public>),
-    Sr25519GenerateNew(Result<sr25519::Public, Error>),
+    Sr25519GenerateNew(Result<sr25519::Public, KeystoreError>),
     Ed25519PublicKeys(Vec<ed25519::Public>),
-    Ed25519GenerateNew(Result<ed25519::Public, Error>),
+    Ed25519GenerateNew(Result<ed25519::Public, KeystoreError>),
     EcdsaPublicKeys(Vec<ecdsa::Public>),
-    EcdsaGenerateNew(Result<ecdsa::Public, Error>),
+    EcdsaGenerateNew(Result<ecdsa::Public, KeystoreError>),
     InsertUnknown(Result<(), ()>),
-    SupportedKeys(Result<Vec<CryptoTypePublicPair>, Error>),
-    Keys(Result<Vec<CryptoTypePublicPair>, Error>),
+    SupportedKeys(Result<Vec<CryptoTypePublicPair>, KeystoreError>),
+    Keys(Result<Vec<CryptoTypePublicPair>, KeystoreError>),
     HasKeys(bool),
-    SignWith(Result<Vec<u8>, Error>),
-    SignWithAny(Result<(CryptoTypePublicPair, Vec<u8>), Error>),
-    SignWithAll(Result<Vec<Result<Vec<u8>, Error>>, ()>),
-    Sr25519VrfSign(Result<VRFSignature, Error>)
+    SignWith(Result<Vec<u8>, KeystoreError>),
+    SignWithAny(Result<(CryptoTypePublicPair, Vec<u8>), KeystoreError>),
+    SignWithAll(Result<Vec<Result<Vec<u8>, KeystoreError>>, ()>),
+    Sr25519VrfSign(Result<VRFSignature, KeystoreError>),
 }
