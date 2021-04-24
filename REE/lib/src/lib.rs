@@ -46,8 +46,7 @@ pub extern "C" fn run() -> u32 {
     //create tokio runtime for the application
     let mut rt = tokio::runtime::Builder::new()
         .basic_scheduler()
-        .enable_time()
-        .enable_io()
+        .enable_all()
         .build()
         .expect("unable to initialize tokio runtime");
 
@@ -82,3 +81,5 @@ pub extern "C" fn run() -> u32 {
 
 #[cfg(feature = "ci")]
 mod ci;
+
+mod utils;

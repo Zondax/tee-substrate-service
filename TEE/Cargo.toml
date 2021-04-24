@@ -13,3 +13,7 @@ panic = "abort"
 
 [profile.dev]
 panic = "abort"
+
+[patch.crates-io]
+sp-keystore = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+sp-core = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }

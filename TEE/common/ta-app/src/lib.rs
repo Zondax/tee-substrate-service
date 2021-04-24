@@ -107,6 +107,8 @@ impl<'r> HandleTaCommand for TaApp<'r> {
 
                 Ok(())
             }
+            CommandId::HasKeys => { todo!() }
+            CommandId::VrfSign => { todo!() }
         }
     }
 }
@@ -145,6 +147,8 @@ impl<'r> TaApp<'r> {
                     Err(Error::OutOfMemory)
                 }
             }
+            CommandId::HasKeys => { todo!() }
+            CommandId::VrfSign => { todo!() }
         }
     }
 }

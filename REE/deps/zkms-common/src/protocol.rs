@@ -7,13 +7,26 @@ pub trait HandleRequest: Send + Sync {
     fn process_request(&self, request: RequestMethod) -> Result<RequestResponse, RequestError>;
 }
 
-///Represents the type of algorithm to use for the key generation
+///Represents the type of algorithm to use for the key
 #[cfg_attr(feature = "serde_", derive(serde::Deserialize, serde::Serialize))]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum CryptoAlgo {
     Sr25519,
     Ed25519,
     Ecdsa,
+}
+
+impl std::convert::TryFrom<[u8; 4]> for CryptoAlgo {
+    type Error = ();
+
+    fn try_from(value: [u8; 4]) -> Result<Self, Self::Error> {
+        match sp_core::crypto::CryptoTypeId(value) {
+            sr25519::CRYPTO_ID => Ok(CryptoAlgo::Sr25519),
+            ed25519::CRYPTO_ID => Ok(CryptoAlgo::Ed25519),
+            ecdsa::CRYPTO_ID => Ok(CryptoAlgo::Ecdsa),
+            _ => Err(())
+        }
+    }
 }
 
 ///Represents the HasKey request arguments
@@ -39,6 +52,7 @@ pub enum RequestMethod {
         pairs: Vec<HasKeysPair>,
     },
     SignMessage {
+        algo: CryptoAlgo,
         key_type: [u8; 4],
         public_key: Vec<u8>,
         msg: Vec<u8>,

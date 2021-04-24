@@ -12,6 +12,18 @@ pub trait SerializeFixed {
     fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed>;
 }
 
+impl<T: SerializeFixed> SerializeFixed for &T {
+    type ErrorFixed = T::ErrorFixed;
+
+    fn len() -> usize {
+        T::len()
+    }
+
+    fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
+        self.serialize_fixed(dest)
+    }
+}
+
 ///Indicates that when deserialized the type copies memory in the stack
 pub trait DeserializeOwned: SerializeFixed + Sized {
     type ErrorOwned;
@@ -31,6 +43,23 @@ impl<'de, T: DeserializeOwned> Deserialize<'de> for T {
 
     fn deserialize(input: &'de [u8]) -> Result<Self, Self::Error> {
         Self::deserialize_owned(input)
+    }
+}
+
+#[cfg(feature = "alloc")]
+///This type needs a variable amout of storage when deserializing
+pub trait DeserializeVariable: Sized {
+    type ErrorVariable;
+
+    fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable>;
+}
+
+#[cfg(feature = "alloc")]
+impl<T: DeserializeOwned> DeserializeVariable for T {
+    type ErrorVariable = T::ErrorOwned;
+
+    fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable> {
+        T::deserialize_owned(input).map(|t| (T::len(), t))
     }
 }
 
@@ -56,9 +85,14 @@ impl<T: SerializeFixed> Serialize for T {
     }
 }
 
+mod common_impl;
+
 mod schnorrkel_impl;
 
 #[cfg(feature = "alloc")]
 mod alloc_impl;
+
+#[cfg(feature = "sp")]
+mod sp;
 
 mod core_impl;

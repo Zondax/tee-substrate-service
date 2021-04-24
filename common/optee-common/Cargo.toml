@@ -5,8 +5,9 @@ authors = ["Zondax GmbH <info@zondax.ch>"]
 edition = "2018"
 
 [features]
-default = []
+default = ["sp"]
 alloc = ["no-std-compat/alloc"]
+sp = ["sp-keystore", "sp-core", "alloc"]
 
 [lib]
 name = "optee_common"
@@ -15,3 +16,10 @@ crate-type = ["rlib"]
 [dependencies]
 no-std-compat = "0.4.1"
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
+
+sp-keystore = { version = "0.9", default-features = false, optional = true }
+sp-core = { version = "3.0.0", default-features = false, optional = true }
+
+[patch.crates-io]
+sp-keystore = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+sp-core = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }

@@ -33,7 +33,7 @@ pub async fn start_service<E: Send + 'static>(
                     Err(resp) => {
                         //if there's an unsupported request we can reply early
                         // and move on to the next request
-                        duct_tx.send(resp);
+                        let _ = duct_tx.send(resp);
                         continue;
                     }
                     Ok(req) => req,
@@ -44,7 +44,7 @@ pub async fn start_service<E: Send + 'static>(
 
                 tokio::task::spawn(async move {
                     //send request to service
-                    tx.send(service_request).await;
+                    let _ = tx.send(service_request).await;
 
                     //wait for reply from service
                     let resp = resp_rx.await.expect("channel will not be canceled");
@@ -52,7 +52,7 @@ pub async fn start_service<E: Send + 'static>(
 
                     //send response back to peer
                     debug!(response = ?resp);
-                    duct_tx.send(resp);
+                    let _ = duct_tx.send(resp);
                 });
             }
         }
@@ -68,11 +68,11 @@ fn translate_request(request: RemoteKeystore) -> Result<RequestMethod, RemoteKey
     use zkms_ductile::KeystoreError as Error;
 
     match request {
-        RemoteKeystore::Sr25519PublicKeys(id) => Ok(RequestMethod::GetPublicKeys {
+        RemoteKeystore::Sr25519GenerateNew { id, seed: _ } => Ok(RequestMethod::GenerateNew {
             algo: CryptoAlgo::Sr25519,
             key_type: id.0,
         }),
-        RemoteKeystore::Sr25519GenerateNew { id, seed: _ } => Ok(RequestMethod::GenerateNew {
+        RemoteKeystore::Sr25519PublicKeys(id) => Ok(RequestMethod::GetPublicKeys {
             algo: CryptoAlgo::Sr25519,
             key_type: id.0,
         }),
@@ -80,7 +80,15 @@ fn translate_request(request: RemoteKeystore) -> Result<RequestMethod, RemoteKey
             algo: CryptoAlgo::Ed25519,
             key_type: id.0,
         }),
+        RemoteKeystore::Ed25519PublicKeys(id) => Ok(RequestMethod::GetPublicKeys {
+            algo: CryptoAlgo::Ed25519,
+            key_type: id.0,
+        }),
         RemoteKeystore::EcdsaGenerateNew { id, seed: _ } => Ok(RequestMethod::GenerateNew {
+            algo: CryptoAlgo::Ecdsa,
+            key_type: id.0,
+        }),
+        RemoteKeystore::EcdsaPublicKeys(id) => Ok(RequestMethod::GetPublicKeys {
             algo: CryptoAlgo::Ecdsa,
             key_type: id.0,
         }),
@@ -95,21 +103,18 @@ fn translate_request(request: RemoteKeystore) -> Result<RequestMethod, RemoteKey
             Ok(RequestMethod::HasKeys { pairs })
         }
         RemoteKeystore::SignWith { id, key, msg } => {
-            //not clear which id is the public key's...
-            // the passed id or the one in the CryptoTypePublicPair??
-            //
-            // maybe the one in the pair represents the curve of the key? (ie ed25, sr25, ecds ?)
-            // NOTE: DAMN I did find it! I was right!! so each module in core has a `CRYPTO_ID` which is the curve/algo :)
-            warn!(
-                req = "SignWith",
-                ?id,
-                ?key,
-                ?msg,
-                "temporarily unimplemented!"
-            );
-            Err(RemoteKeystoreResponse::SignWith(Err(Error::Other(
-                "temporarily unimplemented".to_string(),
-            ))))
+            use std::convert::TryFrom;
+
+            let algo = CryptoAlgo::try_from(key.0 .0)
+                .map_err(|_| Error::KeyNotSupported(u32::from_le_bytes(key.0 .0).into()))
+                .map_err(|e| RemoteKeystoreResponse::SignWith(Err(e)))?;
+
+            Ok(RequestMethod::SignMessage {
+                algo,
+                key_type: id.0,
+                public_key: key.1,
+                msg,
+            })
         }
         RemoteKeystore::Sr25519VrfSign {
             key_type,
@@ -120,10 +125,6 @@ fn translate_request(request: RemoteKeystore) -> Result<RequestMethod, RemoteKey
             public_key: public,
             transcript_data,
         }),
-        RemoteKeystore::Ed25519PublicKeys(_) => {
-            Err(RemoteKeystoreResponse::Ed25519PublicKeys(vec![]))
-        }
-        RemoteKeystore::EcdsaPublicKeys(_) => Err(RemoteKeystoreResponse::EcdsaPublicKeys(vec![])),
         RemoteKeystore::InsertUnknown { .. } => Err(RemoteKeystoreResponse::InsertUnknown(Err(()))),
         RemoteKeystore::SupportedKeys { .. } => Err(RemoteKeystoreResponse::SupportedKeys(Err(
             Error::Unavailable,
