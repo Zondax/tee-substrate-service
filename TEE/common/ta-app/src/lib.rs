@@ -6,20 +6,24 @@ use std::prelude::v1::*;
 use std::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{
-    CommandId, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
+    CommandId, CryptoAlgo, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
     TeeErrorCode as Error,
 };
 use rand_core::{CryptoRng, RngCore};
-use schnorrkel::{keys::Keypair, PublicKey, SecretKey, Signature};
+
+use hashbrown::HashMap;
 
 mod util;
 use util::CSPRNG;
+
+mod crypto;
+use crypto::Keypair;
 
 #[macro_use]
 extern crate log;
 
 pub struct TaApp<'r> {
-    keys: Vec<Keypair>,
+    keys: HashMap<[u8; 4], Vec<Keypair>>,
     rng: &'r mut dyn CSPRNG, //the rng provider
 }
 
@@ -47,110 +51,120 @@ impl<'r> HandleTaCommand for TaApp<'r> {
     ) -> Result<(), Error> {
         trace!("Processing CMD {:?}", cmd_id);
 
-        Self::check_mem(cmd_id, input, &output)?;
-        trace!("checked mem succesfully...");
+        // Self::check_mem(cmd_id, input, &output)?;
+        // trace!("checked mem succesfully...");
 
         match cmd_id {
             CommandId::GenerateNew => {
-                let seed: &str = Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
-                trace!("read seed_len={:?}", seed.len());
+                let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
 
-                match seed.len() {
-                    0 => {
-                        let keypair = Keypair::generate_with(&mut self.rng);
-                        trace!("generated keypair; public={:x?}", keypair.public.to_bytes());
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
 
-                        //write to output
-                        keypair.public.serialize_fixed(output).unwrap();
+                //generate keypair
+                let keypair = Keypair::generate_new(&mut self.rng, algo);
 
-                        //store keypair
-                        self.keys.push(keypair);
-                    }
-                    _ => {
-                        todo!("return error, api meant to NOT be supported")
-                    }
+                let public = keypair.public();
+                trace!("generated keypair; public = {:x?}", public);
+
+                //copy into output
+                if public.len() > output.len() {
+                    return Err(Error::BadFormat);
                 }
+                output[..public.len()].copy_from_slice(public);
+
+                //insert into own store
+                self.keys.entry(key_type).or_default().push(keypair);
 
                 Ok(())
             }
             CommandId::GetKeys => {
-                trace!("number of keys: {:?}", self.keys.len());
-
-                for (i, key) in self.keys.iter().enumerate() {
-                    let bytes = key.public.to_bytes();
-                    let hex = hex::encode(&bytes);
-                    trace!("key {}: {}", i, hex);
-                }
-
                 todo!()
             }
             CommandId::SignMessage => {
-                let public: PublicKey =
-                    PublicKey::deserialize_owned(&input).map_err(|_| Error::BadFormat)?;
-                trace!("read public key: {:x?}", public.to_bytes());
+                let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
 
-                util::advance_slice(&mut input, PublicKey::len()).unwrap();
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 4).unwrap();
+
+                let public: &[u8] =
+                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, public.len()).unwrap();
+                trace!("read public key: {:x?}", public);
 
                 let msg: &[u8] = Deserialize::deserialize(&input).unwrap();
                 trace!("read msg: {:x?}", msg);
 
-                let secret = self
-                    .find_associated_key(public)
+                let pair = self
+                    .find_associated_key(&key_type, public)
                     .ok_or(Error::BadParameters)?;
-                trace!("got key");
+                trace!("got keypair");
 
-                let sig = self.sign(&secret, b"zondax", &msg, &public);
-                trace!("signed!");
+                let sig = pair.sign(&mut self.rng, &msg);
+                trace!("signed! sig={:x?}", sig);
 
-                sig.serialize_fixed(output).unwrap();
-                trace!("signature copied to out");
+                if sig.len() > output.len() {
+                    return Err(Error::BadFormat);
+                }
+                output[..public.len()].copy_from_slice(&sig);
 
                 Ok(())
             }
-            CommandId::HasKeys => { todo!() }
-            CommandId::VrfSign => { todo!() }
+            CommandId::HasKeys => {
+                todo!()
+            }
+            CommandId::VrfSign => {
+                todo!()
+            }
         }
     }
 }
 
 impl<'r> TaApp<'r> {
-    ///Makes sure the input and output slice have enough length
-    fn check_mem(cmd: CommandId, mut input: &[u8], mut out: &[u8]) -> Result<(), Error> {
-        match cmd {
-            CommandId::GenerateNew => {
-                let len = util::read_and_advance_u64(&mut input)?;
+    // ///Makes sure the input and output slice have enough length
+    // fn check_mem(cmd: CommandId, mut input: &[u8], mut out: &[u8]) -> Result<(), Error> {
+    //     match cmd {
+    //         CommandId::GenerateNew => {
+    //             let len = util::read_and_advance_u64(&mut input)?;
 
-                let input = input.len() >= len as _;
-                let out = out.len() >= PublicKey::len();
+    //             let input = input.len() >= len as _;
+    //             let out = out.len() >= PublicKey::len();
 
-                if input && out {
-                    Ok(())
-                } else {
-                    Err(Error::OutOfMemory)
-                }
-            }
-            CommandId::GetKeys => Ok(()),
-            CommandId::SignMessage => {
-                //we can skip the public key here
+    //             if input && out {
+    //                 Ok(())
+    //             } else {
+    //                 Err(Error::OutOfMemory)
+    //             }
+    //         }
+    //         CommandId::GetKeys => Ok(()),
+    //         CommandId::SignMessage => {
+    //             //we can skip the public key here
 
-                //attempt to read public_key, error if failed
-                let _ = util::read_and_advance(&mut input, PublicKey::len())?;
+    //             //attempt to read public_key, error if failed
+    //             let _ = util::read_and_advance(&mut input, PublicKey::len())?;
 
-                let len = util::read_and_advance_u64(&mut input)?;
-                let input = input.len() >= len as _; //check msg len
+    //             let len = util::read_and_advance_u64(&mut input)?;
+    //             let input = input.len() >= len as _; //check msg len
 
-                let out = out.len() >= Signature::len();
+    //             let out = out.len() >= Signature::len();
 
-                if input && out {
-                    Ok(())
-                } else {
-                    Err(Error::OutOfMemory)
-                }
-            }
-            CommandId::HasKeys => { todo!() }
-            CommandId::VrfSign => { todo!() }
-        }
-    }
+    //             if input && out {
+    //                 Ok(())
+    //             } else {
+    //                 Err(Error::OutOfMemory)
+    //             }
+    //         }
+    //         CommandId::HasKeys => {
+    //             todo!()
+    //         }
+    //         CommandId::VrfSign => {
+    //             todo!()
+    //         }
+    //     }
+    // }
 }
 
 impl<'r> TaApp<'r> {
@@ -161,20 +175,11 @@ impl<'r> TaApp<'r> {
         }
     }
 
-    fn find_associated_key(&self, public_key: PublicKey) -> Option<SecretKey> {
-        let mut keys = self.keys.iter();
-        while let Some(pair) = keys.next() {
-            if pair.public == public_key {
-                return Some(pair.secret.clone()); //this is just 64 bytes
-            }
-        }
-
-        None
-    }
-
-    /// Sign a message with the given secret key (and public key)
-    fn sign(&mut self, sk: &SecretKey, ctx: &[u8], msg: &[u8], pk: &PublicKey) -> Signature {
-        util::sign::sign_with_rng(&mut self.rng, sk, ctx, msg, pk)
+    fn find_associated_key(&self, key_type: &[u8; 4], public_key: &[u8]) -> Option<Keypair> {
+        self.keys
+            .get(key_type)
+            .and_then(|keys| keys.iter().find(|k| k.public() == public_key))
+            .cloned()
     }
 }
 
