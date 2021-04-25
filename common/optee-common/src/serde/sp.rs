@@ -7,7 +7,9 @@ use super::{
     core_impl::ArrayError,
 };
 
-use sp_keystore::vrf::{VRFTranscriptData, VRFTranscriptValue};
+use sp_keystore::vrf::{
+    SignatureError, VRFOutput, VRFProof, VRFSignature, VRFTranscriptData, VRFTranscriptValue,
+};
 
 impl Serialize for VRFTranscriptValue {
     type Error = Infallible;
@@ -137,5 +139,73 @@ impl DeserializeVariable for VRFTranscriptData {
                 items,
             },
         ))
+    }
+}
+
+impl SerializeFixed for VRFSignature {
+    type ErrorFixed = usize;
+
+    fn len() -> usize {
+        32 + 64
+    }
+
+    fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
+        if dest.len() < Self::len() {
+            return Err(Self::len());
+        }
+
+        let preout = self.output.to_bytes();
+        let proof = self.proof.to_bytes();
+
+        fn flatten_array_err(err: ArrayError<usize>) -> usize {
+            match err {
+                ArrayError::Length(l) | ArrayError::Serde(l) => l,
+            }
+        }
+
+        preout.serialize_fixed(dest).map_err(flatten_array_err)?;
+        proof
+            .serialize_fixed(&mut dest[preout.len()..])
+            .map_err(flatten_array_err)?;
+
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum VRFSignatureError {
+    Length(usize),
+    SignatureError(SignatureError),
+}
+
+impl From<ArrayError<usize>> for VRFSignatureError {
+    fn from(err: ArrayError<usize>) -> Self {
+        match err {
+            ArrayError::Length(l) | ArrayError::Serde(l) => Self::Length(l),
+        }
+    }
+}
+
+impl From<SignatureError> for VRFSignatureError {
+    fn from(err: SignatureError) -> Self {
+        Self::SignatureError(err)
+    }
+}
+
+impl DeserializeOwned for VRFSignature {
+    type ErrorOwned = VRFSignatureError;
+
+    fn deserialize_owned(input: &[u8]) -> Result<Self, Self::ErrorOwned> {
+        if input.len() < Self::len() {
+            return Err(VRFSignatureError::Length(Self::len()));
+        }
+
+        let preout: [u8; 32] = DeserializeOwned::deserialize_owned(&input[..32])?;
+        let proof: [u8; 64] = DeserializeOwned::deserialize_owned(&input[32..])?;
+
+        let output = VRFOutput::from_bytes(&preout)?;
+        let proof = VRFProof::from_bytes(&proof)?;
+
+        Ok(Self { output, proof })
     }
 }

@@ -3,10 +3,11 @@
 //! This Handler is implemented here because this module has access to private functions that
 //! do the weight lifting of performing invocations to OPTEE through the TEEC api, which is unsafe
 //! Also by doing this the host client doesnt need to depend on obscure OPTEE bindings
-use schnorrkel::{keys::PublicKey, sign::Signature};
-use zkms_common::{HandleRequest, RequestError, RequestMethod, RequestResponse};
+use zkms_common::{
+    protocol::VRFSignature, HandleRequest, RequestError, RequestMethod, RequestResponse,
+};
 
-use optee_common::{CommandId, Deserialize, Serialize, SerializeFixed};
+use optee_common::{CommandId, Deserialize, DeserializeOwned, Serialize, SerializeFixed};
 
 use crate::invoke_command;
 
@@ -106,7 +107,7 @@ impl HandleRequest for Handler {
                 Ok(RequestResponse::SignMessage { signature: out })
             }
             RequestMethod::HasKeys { pairs } => {
-                //prepent lenght of entire set
+                //prepend lenght of entire set
                 // each pair has key type (fixed size) and public key, which might have varying lenght
                 let p0 = pairs
                     .into_iter()
@@ -141,16 +142,20 @@ impl HandleRequest for Handler {
 
                     //serialize transcript data
                     v.append(&mut transcript_data.serialize().unwrap());
+                    v
                 };
                 let p0 = ParamTmpRef::new_input(&p0);
 
-                let mut out = [0; 64];
+                let mut out = vec![0; VRFSignature::len()];
                 let p1 = ParamTmpRef::new_output(&mut out[..]);
 
-                let mut op = invoke_command(CommandId::VrfSign.into(), &mut op)
-                    .map_err(|e| e.to_string())?;
+                let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
 
-                Ok(RequestResponse::VrfSign { signature: todo!() })
+                invoke_command(CommandId::VrfSign.into(), &mut op).map_err(|e| e.to_string())?;
+
+                let signature = VRFSignature::deserialize_owned(&out).unwrap();
+
+                Ok(RequestResponse::VrfSign { signature })
             }
         }
     }

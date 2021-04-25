@@ -21,10 +21,12 @@ impl<T: Serialize> Serialize for [T] {
 }
 
 impl Serialize for &str {
-    type Error = ();
+    type Error = usize;
 
     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-        self.as_bytes().serialize()
+        let slice = self.as_bytes();
+        let len = slice.len();
+        slice.serialize().map_err(|_| len)
     }
 }
 
@@ -54,7 +56,7 @@ pub(crate) mod vec {
         type Error = T::Error;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-            self.serialize()
+            <Vec<T> as Serialize>::serialize(self)
         }
     }
 

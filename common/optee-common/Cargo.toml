@@ -5,7 +5,7 @@ authors = ["Zondax GmbH <info@zondax.ch>"]
 edition = "2018"
 
 [features]
-default = ["sp"]
+default = ["alloc"]
 alloc = ["no-std-compat/alloc"]
 sp = ["sp-keystore", "sp-core", "alloc"]
 

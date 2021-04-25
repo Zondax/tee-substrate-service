@@ -20,7 +20,7 @@ impl<T: SerializeFixed> SerializeFixed for &T {
     }
 
     fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
-        self.serialize_fixed(dest)
+        T::serialize_fixed(self, dest)
     }
 }
 

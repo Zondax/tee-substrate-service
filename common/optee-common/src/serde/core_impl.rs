@@ -42,14 +42,14 @@ impl<'de> Deserialize<'de> for &'de str {
 }
 
 impl SerializeFixed for u8 {
-    type ErrorFixed = ();
+    type ErrorFixed = usize;
 
     fn len() -> usize {
         1
     }
 
     fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
-        *dest.get_mut(0).ok_or(())? = *self;
+        *dest.get_mut(0).ok_or(1usize)? = *self;
         Ok(())
     }
 }

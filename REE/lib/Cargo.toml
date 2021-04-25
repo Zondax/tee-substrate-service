@@ -25,7 +25,7 @@ env_logger = "0.8.3"
 
 zkms-common = { version = "0.1.0",  path = "../deps/zkms-common" }
 host-app = { version = "0.1.0", path = "../common/host-app" }
-optee-common = { version = "0.1.0", path = "../../common/optee-common", features = ["alloc"] }
+optee-common = { version = "0.1.0", path = "../../common/optee-common", features = ["sp"] }
 zondee-teec = { version = "0.1.0", path = "../../framework/crates/zondee-teec" }
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 
