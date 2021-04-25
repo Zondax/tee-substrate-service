@@ -121,3 +121,44 @@ impl<T: DeserializeOwned, const N: usize> DeserializeOwned for [T; N] {
         Ok(unsafe { transmute_copy(&container) })
     }
 }
+
+mod tuple2 {
+    use super::*;
+
+    impl<'de, A: Deserialize<'de>, B: Deserialize<'de>> Deserialize<'de> for (A, B) {
+        type Error = Tuple2Error<A::Error, B::Error>;
+
+        fn deserialize(input: &'de [u8]) -> Result<Self, Self::Error> {
+            let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
+            let midpoint = u64::from_le_bytes(midpoint) as usize;
+
+            let a = Deserialize::deserialize(&input[8..midpoint]).map_err(Tuple2Error::ErrorA)?;
+            let b =
+                Deserialize::deserialize(&input[8 + midpoint..]).map_err(Tuple2Error::ErrorB)?;
+
+            Ok((a, b))
+        }
+    }
+
+    // impl<A: SerializeFixed, B: SerializeFixed> SerializeFixed for (A, B) {
+    //     type ErrorFixed = Tuple2Error<A::ErrorFixed, B::ErrorFixed>;
+
+    //     fn len() -> usize {
+    //         8 + A::len() + B::len()
+    //     }
+
+    //     fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
+    //         if dest.len() < Self::len() {
+    //             return Err(Tuple2Error::Length(Self::len()));
+    //         }
+
+    //         let midpoint = A::len() as u64;
+    //         midpoint.to_le_bytes().serialize_fixed(dest).unwrap();
+
+    //         self.0.serialize_fixed(dest).map_err(Tuple2Error::ErrorA)?;
+    //         self.1.serialize_fixed(dest).map_err(Tuple2Error::ErrorB)?;
+
+    //         Ok(())
+    //     }
+    // }
+}

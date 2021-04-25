@@ -2,10 +2,7 @@ use core::borrow::Borrow;
 use std::convert::Infallible;
 
 use super::*;
-use super::{
-    alloc_impl::{tuple2::Tuple2Error, vec::VecError},
-    core_impl::ArrayError,
-};
+use super::{alloc_impl::vec::VecError, core_impl::ArrayError};
 
 use sp_keystore::vrf::{
     SignatureError, VRFOutput, VRFProof, VRFSignature, VRFTranscriptData, VRFTranscriptValue,
@@ -56,12 +53,12 @@ impl DeserializeVariable for VRFTranscriptValue {
         match variant {
             0 => {
                 let (len, bytes): (_, Vec<u8>) =
-                    DeserializeVariable::deserialize_variable(&input[0..])?;
+                    DeserializeVariable::deserialize_variable(&input[1..])?;
                 Ok((len, Self::Bytes(bytes)))
             }
             1 => {
                 let (len, num): (_, [u8; 8]) =
-                    DeserializeVariable::deserialize_variable(&input[0..])?;
+                    DeserializeVariable::deserialize_variable(&input[1..])?;
                 let num = u64::from_le_bytes(num);
                 Ok((len, Self::U64(num)))
             }
@@ -108,7 +105,8 @@ impl From<VecError<Tuple2Error<VecError<usize>, VRFTranscriptValueError>>>
             VecError::Length(len)
             | VecError::Serde(
                 Tuple2Error::ErrorA(VecError::Length(len) | VecError::Serde(len))
-                | Tuple2Error::ErrorB(VRFTranscriptValueError::Length(len)),
+                | Tuple2Error::ErrorB(VRFTranscriptValueError::Length(len))
+                | Tuple2Error::Length(len),
             ) => Self::Length(len),
             VecError::Serde(Tuple2Error::ErrorB(VRFTranscriptValueError::UnknownVariant(
                 variant,
@@ -146,7 +144,7 @@ impl SerializeFixed for VRFSignature {
     type ErrorFixed = usize;
 
     fn len() -> usize {
-        32 + 64
+        8 + 32 + 64
     }
 
     fn serialize_fixed(&self, dest: &mut [u8]) -> Result<(), Self::ErrorFixed> {
@@ -163,6 +161,12 @@ impl SerializeFixed for VRFSignature {
             }
         }
 
+        let midpoint = preout.len() as u64;
+
+        midpoint
+            .to_le_bytes()
+            .serialize_fixed(dest)
+            .map_err(flatten_array_err)?;
         preout.serialize_fixed(dest).map_err(flatten_array_err)?;
         proof
             .serialize_fixed(&mut dest[preout.len()..])
@@ -200,8 +204,14 @@ impl DeserializeOwned for VRFSignature {
             return Err(VRFSignatureError::Length(Self::len()));
         }
 
-        let preout: [u8; 32] = DeserializeOwned::deserialize_owned(&input[..32])?;
-        let proof: [u8; 64] = DeserializeOwned::deserialize_owned(&input[32..])?;
+        let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
+        let midpoint = u64::from_le_bytes(midpoint) as usize;
+        if midpoint != 32 {
+            return Err(VRFSignatureError::Length(midpoint));
+        }
+
+        let preout: [u8; 32] = DeserializeOwned::deserialize_owned(&input[8..midpoint])?;
+        let proof: [u8; 64] = DeserializeOwned::deserialize_owned(&input[8 + midpoint..])?;
 
         let output = VRFOutput::from_bytes(&preout)?;
         let proof = VRFProof::from_bytes(&proof)?;

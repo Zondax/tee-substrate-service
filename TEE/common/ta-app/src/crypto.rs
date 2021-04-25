@@ -7,6 +7,7 @@ use optee_common::CryptoAlgo;
 mod ecdsa;
 mod ed25519;
 mod sr25519;
+pub use sr25519::VRFData;
 
 ///Handles all the diffrent supported curves with a unified interface
 #[derive(Clone)]
@@ -38,6 +39,17 @@ impl Keypair {
             Keypair::Sr25519(kp) => kp.sign(rng, msg).to_vec(),
             Keypair::Ed25519(kp) => kp.sign(msg).to_vec(),
             Keypair::Ecdsa(kp) => kp.sign(msg).to_vec(),
+        }
+    }
+
+    pub fn vrf_sign<C: CSPRNG>(
+        &self,
+        rng: &mut C,
+        data: sr25519::VRFData<'_>,
+    ) -> Result<Vec<u8>, ()> {
+        match self {
+            Keypair::Ed25519(_) | Keypair::Ecdsa(_) => Err(()),
+            Keypair::Sr25519(kp) => Ok(kp.vrf_sign(rng, data)),
         }
     }
 }

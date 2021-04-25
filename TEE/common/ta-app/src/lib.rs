@@ -148,7 +148,33 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 Ok(())
             }
             CommandId::VrfSign => {
-                todo!()
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 4).unwrap();
+
+                let public: &[u8] =
+                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, public.len()).unwrap();
+                trace!("got public key");
+
+                let pair = self
+                    .find_associated_key(&key_type, public)
+                    .ok_or(Error::BadParameters)?;
+                trace!("got keypair");
+
+                let data: crypto::VRFData =
+                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                trace!("got vrf data");
+
+                let vrf = pair.vrf_sign(&mut self.rng, data)
+                    .map_err(|_| Error::BadParameters)?;
+
+                if vrf.len() > output.len() {
+                    return Err(Error::BadFormat);
+                }
+                output[..vrf.len()].copy_from_slice(&vrf);
+
+                Ok(())
             }
         }
     }

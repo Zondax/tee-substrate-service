@@ -11,9 +11,15 @@ impl<T: Serialize> Serialize for [T] {
         let len = self.len() as u64;
 
         let mut vec = vec![0; 8];
+        //number of items
         vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
+
         for item in self.iter() {
-            vec.append(&mut item.serialize()?);
+            let mut item = item.serialize()?;
+            let size = item.len() as u64;
+
+            vec.extend_from_slice(&size.to_le_bytes()[..]);
+            vec.append(&mut item);
         }
 
         Ok(vec)
@@ -37,18 +43,7 @@ pub(crate) mod vec {
         type Error = T::Error;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-            let len = self.len() as u64;
-
-            //number of vectors
-            let mut vec = vec![0; 8];
-            vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
-
-            //all the inner items in sequence
-            for item in self.iter() {
-                vec.append(&mut item.serialize()?);
-            }
-
-            Ok(vec)
+            <[T] as Serialize>::serialize(self)
         }
     }
 
@@ -172,14 +167,8 @@ mod cow {
     }
 }
 
-pub(crate) mod tuple2 {
+mod tuple2 {
     use super::*;
-
-    #[derive(Debug, Clone)]
-    pub enum Tuple2Error<AE, BE> {
-        ErrorA(AE),
-        ErrorB(BE),
-    }
 
     impl<A: Serialize, B: Serialize> Serialize for (A, B) {
         type Error = Tuple2Error<A::Error, B::Error>;
@@ -189,6 +178,8 @@ pub(crate) mod tuple2 {
             let mut b = self.1.serialize().map_err(Tuple2Error::ErrorB)?;
 
             let mut v = Vec::with_capacity(a.len() + b.len());
+            let midpoint = a.len() as u64;
+            v.extend_from_slice(&midpoint.to_le_bytes()[..]);
             v.append(&mut a);
             v.append(&mut b);
 
@@ -196,13 +187,29 @@ pub(crate) mod tuple2 {
         }
     }
 
+    impl<A, B> From<ArrayError<usize>> for Tuple2Error<A, B> {
+        fn from(err: ArrayError<usize>) -> Self {
+            match err {
+                ArrayError::Length(len) | ArrayError::Serde(len) => Self::Length(len),
+            }
+        }
+    }
+
     impl<A: DeserializeVariable, B: DeserializeVariable> DeserializeVariable for (A, B) {
         type ErrorVariable = Tuple2Error<A::ErrorVariable, B::ErrorVariable>;
 
         fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable> {
-            let (size_a, a) =
-                DeserializeVariable::deserialize_variable(input).map_err(Tuple2Error::ErrorA)?;
-            let (size_b, b) = DeserializeVariable::deserialize_variable(&input[size_a..])
+            let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
+            let midpoint = u64::from_le_bytes(midpoint) as usize;
+
+            let (size_a, a) = DeserializeVariable::deserialize_variable(&input[8..])
+                .map_err(Tuple2Error::ErrorA)?;
+
+            if size_a != midpoint {
+                return Err(Tuple2Error::Length(midpoint));
+            }
+
+            let (size_b, b) = DeserializeVariable::deserialize_variable(&input[8 + size_a..])
                 .map_err(Tuple2Error::ErrorB)?;
 
             Ok(((size_a + size_b), (a, b)))

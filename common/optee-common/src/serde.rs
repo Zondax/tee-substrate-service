@@ -92,7 +92,18 @@ mod schnorrkel_impl;
 #[cfg(feature = "alloc")]
 mod alloc_impl;
 
+#[cfg(feature = "alloc")]
+pub use alloc_impl::vec::VecError;
+
 #[cfg(feature = "sp")]
 mod sp;
 
 mod core_impl;
+pub use core_impl::{ArrayError, StrError};
+
+#[derive(Debug, Clone)]
+pub enum Tuple2Error<AE, BE> {
+    Length(usize),
+    ErrorA(AE),
+    ErrorB(BE),
+}

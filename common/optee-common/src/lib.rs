@@ -21,5 +21,5 @@ pub trait HandleTaCommand {
     ) -> Result<(), TeeErrorCode>;
 }
 
-mod serde;
+pub mod serde;
 pub use serde::*;
