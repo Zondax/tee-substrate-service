@@ -6,8 +6,8 @@ use std::prelude::v1::*;
 use std::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{
-    CommandId, CryptoAlgo, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
-    TeeErrorCode as Error,
+    CommandId, CryptoAlgo, Deserialize, DeserializeOwned, DeserializeVariable, HandleTaCommand,
+    HasKeysPair, SerializeFixed, TeeErrorCode as Error,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -86,6 +86,11 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
                 util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
 
+                //no need to keep going if the output buffer is already too small
+                if algo.signature_len() > output.len() {
+                    return Err(Error::BadFormat)?;
+                }
+
                 let key_type: [u8; 4] =
                     DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
                 util::advance_slice(&mut input, 4).unwrap();
@@ -107,14 +112,40 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 trace!("signed! sig={:x?}", sig);
 
                 if sig.len() > output.len() {
+                    //double check even if we checked at the start
                     return Err(Error::BadFormat);
                 }
-                output[..public.len()].copy_from_slice(&sig);
+                output[..sig.len()].copy_from_slice(&sig);
 
                 Ok(())
             }
             CommandId::HasKeys => {
-                todo!()
+                //check if we have 1 byte available for the bool output
+                if output.len() < 1 {
+                    return Err(Error::BadFormat);
+                }
+
+                let (_, pairs): (_, Vec<HasKeysPair>) =
+                    DeserializeVariable::deserialize_variable(input)
+                        .map_err(|_| Error::BadFormat)?;
+
+                let search = pairs.into_iter().all(
+                    |HasKeysPair {
+                         key_type,
+                         public_key,
+                     }| {
+                        self.find_associated_key(&key_type, public_key.as_slice())
+                            .is_some()
+                    },
+                );
+
+                if search {
+                    output[0] = 1;
+                } else {
+                    output[0] = 0;
+                }
+
+                Ok(())
             }
             CommandId::VrfSign => {
                 todo!()
