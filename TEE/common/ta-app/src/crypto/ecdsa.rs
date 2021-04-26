@@ -1,4 +1,11 @@
-use k256::ecdsa::{recoverable::Signature, signature::DigestSigner, SigningKey};
+use k256::{
+    ecdsa::{
+        recoverable::Signature,
+        signature::{DigestSigner, DigestVerifier},
+        Error, SigningKey, VerifyingKey,
+    },
+    EncodedPoint,
+};
 
 use crate::util::CSPRNG;
 
@@ -35,13 +42,15 @@ impl Keypair {
         &self.public
     }
 
+    fn prehash_message(msg: &[u8]) -> blake2::Blake2s {
+        use blake2::{Blake2s, Digest};
+        let mut blake2 = Blake2s::new();
+        blake2.update(msg);
+        blake2
+    }
+
     pub fn sign(&self, msg: &[u8]) -> [u8; 65] {
-        let digest = {
-            use blake2::{Blake2s, Digest};
-            let mut blake2 = Blake2s::new();
-            blake2.update(msg);
-            blake2
-        };
+        let digest = Self::prehash_message(msg);
 
         let signature: Signature = self.secret.sign_digest(digest);
 
@@ -50,5 +59,35 @@ impl Keypair {
             array.copy_from_slice(signature.as_ref());
             array
         }
+    }
+}
+
+#[derive(Debug)]
+pub struct PublicKey(VerifyingKey);
+
+impl PublicKey {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, Error> {
+        let point = EncodedPoint::from_bytes(bytes).map_err(|_| Error::new())?;
+
+        VerifyingKey::from_encoded_point(&point).map(Self)
+    }
+
+    pub fn verify(&self, msg: &[u8], sig: &[u8; 65]) -> bool {
+        use core::convert::TryFrom;
+
+        let sig = match Signature::try_from(&sig[..]) {
+            Err(_) => return false,
+            Ok(sig) => sig,
+        };
+
+        let digest = Keypair::prehash_message(msg);
+
+        self.0.verify_digest(digest, &sig).is_ok()
+    }
+}
+
+impl From<Keypair> for PublicKey {
+    fn from(pair: Keypair) -> Self {
+        Self(pair.secret.verify_key())
     }
 }

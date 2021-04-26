@@ -1,4 +1,4 @@
-use ed25519_dalek::{SecretKey, SECRET_KEY_LENGTH};
+use ed25519_dalek::{SecretKey, Signature, SignatureError, SECRET_KEY_LENGTH};
 
 use crate::util::CSPRNG;
 
@@ -11,7 +11,7 @@ impl Clone for Keypair {
 
         let keypair = ed25519_dalek::Keypair {
             public: (&secret).into(),
-            secret
+            secret,
         };
 
         Self(keypair)
@@ -41,5 +41,27 @@ impl Keypair {
     pub fn sign(&self, msg: &[u8]) -> [u8; 64] {
         use ed25519_dalek::Signer;
         self.0.sign(msg).to_bytes()
+    }
+}
+
+#[derive(Debug)]
+pub struct PublicKey(ed25519_dalek::PublicKey);
+
+impl PublicKey {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SignatureError> {
+        ed25519_dalek::PublicKey::from_bytes(bytes).map(Self)
+    }
+
+    pub fn verify(&self, msg: &[u8], sig: &[u8; 64]) -> bool {
+        use ed25519_dalek::Verifier;
+
+        let sig = Signature::from(*sig);
+        self.0.verify(msg, &sig).is_ok()
+    }
+}
+
+impl From<Keypair> for PublicKey {
+    fn from(pair: Keypair) -> Self {
+        Self(pair.0.public)
     }
 }

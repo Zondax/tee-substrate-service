@@ -1,6 +1,7 @@
 use schnorrkel::{
     keys,
     vrf::{VRFPreOut, VRFProof},
+    Signature, SignatureError,
 };
 
 use crate::util::CSPRNG;
@@ -17,12 +18,19 @@ impl Keypair {
         self.0.public.as_ref()
     }
 
-    pub fn sign<C: CSPRNG>(&self, rng: &mut C, msg: &[u8]) -> [u8; 64] {
+    fn get_transcript<'rng, C: CSPRNG + 'rng>(
+        rng: &'rng mut C,
+        msg: &[u8],
+    ) -> schnorrkel::context::SigningTranscriptWithRng<merlin::Transcript, &'rng mut C> {
         let mut t = merlin::Transcript::new(b"SigningContext");
         t.append_message(b"", b"substrate"); //ctx
         t.append_message(b"sign-bytes", msg);
 
-        let t = schnorrkel::context::attach_rng(t, rng);
+        schnorrkel::context::attach_rng(t, rng)
+    }
+
+    pub fn sign<C: CSPRNG>(&self, rng: &mut C, msg: &[u8]) -> [u8; 64] {
+        let t = Self::get_transcript(rng, msg);
 
         self.0.sign(t).to_bytes()
     }
@@ -42,22 +50,78 @@ impl Keypair {
 
         //VRFSignature serialized
         [&midpoint[..], &preout[..], &proof[..]].concat()
+    }
+}
 
+#[derive(Debug)]
+pub struct PublicKey(keys::PublicKey);
+
+impl PublicKey {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, SignatureError> {
+        keys::PublicKey::from_bytes(bytes).map(Self)
+    }
+
+    pub fn verify<C: CSPRNG>(&self, rng: &mut C, msg: &[u8], sig: &[u8; 64]) -> bool {
+        let sig = match Signature::from_bytes(&sig[..]) {
+            Ok(sig) => sig,
+            Err(_) => return false,
+        };
+
+        let transcript = Keypair::get_transcript(rng, msg);
+
+        self.0.verify(transcript, &sig).is_ok()
+    }
+
+    pub fn verify_vrf<C: CSPRNG>(&self, rng: &mut C, data: vrf::VRFData<'_>, sig: &[u8]) -> bool {
+        if sig.len() < 8 + 32 + 64 {
+            return false;
+        }
+
+        let midpoint: [u8; 8] = match optee_common::DeserializeOwned::deserialize_owned(&sig[..8]) {
+            Err(_) => return false,
+            Ok(midpoint) => midpoint,
+        };
+        let midpoint = u64::from_le_bytes(midpoint) as usize;
+
+        let preout = &sig[8..midpoint];
+        let preout = match VRFPreOut::from_bytes(preout) {
+            Err(_) => return false,
+            Ok(preout) => preout,
+        };
+
+        let proof = &sig[midpoint..];
+        let proof = match VRFProof::from_bytes(proof) {
+            Err(_) => return false,
+            Ok(proof) => proof,
+        };
+
+        let t = vrf::make_transcript(data);
+        let t = schnorrkel::context::attach_rng(t, rng);
+
+        self.0.vrf_verify(t, &preout, &proof).is_ok()
+    }
+}
+
+impl From<Keypair> for PublicKey {
+    fn from(pair: Keypair) -> Self {
+        Self(pair.0.public)
     }
 }
 
 mod vrf {
+    use merlin::Transcript;
     use optee_common::{
         serde::{ArrayError, Tuple2Error},
         Deserialize, DeserializeOwned,
     };
-    use merlin::Transcript;
 
+    #[derive(Debug)]
     pub enum VRFValue<'de> {
         Bytes(&'de [u8]),
         U64(u64),
     }
 
+    #[derive(Debug)]
     pub struct VRFData<'de> {
         label: &'de [u8],
         items: crate::Vec<(&'de [u8], VRFValue<'de>)>,

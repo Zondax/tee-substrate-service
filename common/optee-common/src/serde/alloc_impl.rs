@@ -26,6 +26,22 @@ impl<T: Serialize> Serialize for [T] {
     }
 }
 
+impl Serialize for &[u8] {
+    type Error = Infallible;
+
+    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+        let len = self.len() as u64;
+
+        let mut vec = vec![0; 8];
+        //number of items
+        vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
+
+        vec.extend_from_slice(self);
+
+        Ok(vec)
+    }
+}
+
 impl Serialize for &str {
     type Error = usize;
 
@@ -36,6 +52,14 @@ impl Serialize for &str {
     }
 }
 
+impl Serialize for u8 {
+    type Error = Infallible;
+
+    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+        Ok(vec![*self])
+    }
+}
+
 pub(crate) mod vec {
     use super::*;
 
@@ -43,7 +67,7 @@ pub(crate) mod vec {
         type Error = T::Error;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-            <[T] as Serialize>::serialize(self)
+            <[T] as Serialize>::serialize(&self.as_slice())
         }
     }
 
@@ -106,7 +130,7 @@ impl Serialize for HasKeysPair {
         //create vec for key_type : len : key
         let mut pair = vec![0; 4];
         self.key_type.serialize_fixed(&mut pair[..4]).unwrap();
-        pair.append(&mut self.public_key.as_slice().serialize().unwrap());
+        pair.append(&mut (&self.public_key.as_slice()).serialize().unwrap());
 
         Ok(pair)
     }
@@ -147,16 +171,57 @@ impl DeserializeVariable for HasKeysPair {
     }
 }
 
+impl Serialize for crate::CryptoAlgo {
+    type Error = Infallible;
+
+    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+        let len = Self::len();
+
+        let mut v =  vec![0; len];
+        self.serialize_fixed(&mut v).unwrap();
+
+        Ok(v)
+    }
+}
+
 mod cow {
     use super::*;
     use std::borrow::{Cow, ToOwned};
 
-    impl<'c, T> Serialize for Cow<'c, [T]>
-    where
-        [T]: ToOwned + Serialize<Error = <<[T] as ToOwned>::Owned as Serialize>::Error>,
-        <[T] as ToOwned>::Owned: Serialize,
+    // impl<'c, T> Serialize for Cow<'c, [T]>
+    // where
+    //     for<'a> &'a [T]: Serialize<Error = <<[T] as ToOwned>::Owned as Serialize>::Error>,
+    //     [T]: ToOwned,
+    //     <[T] as ToOwned>::Owned: Serialize,
+    // {
+    //     type Error = <<[T] as ToOwned>::Owned as Serialize>::Error;
+
+    //     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+    //         match self {
+    //             Cow::Borrowed(borr) => borr.serialize(),
+    //             Cow::Owned(own) => own.serialize(),
+    //         }
+    //     }
+    // }
+
+    // impl<'c, T> Serialize for Cow<'c, [T]>
+    // where
+    //     [T]: ToOwned + Serialize<Error = <<[T] as ToOwned>::Owned as Serialize>::Error>,
+    //     <[T] as ToOwned>::Owned: Serialize,
+    // {
+    //     type Error = <<[T] as ToOwned>::Owned as Serialize>::Error;
+
+    //     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+    //         match self {
+    //             Cow::Borrowed(borr) => borr.serialize(),
+    //             Cow::Owned(own) => own.serialize(),
+    //         }
+    //     }
+    // }
+
+    impl<'c> Serialize for Cow<'c, [u8]>
     {
-        type Error = <[T] as Serialize>::Error;
+        type Error = <Vec<u8> as Serialize>::Error;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
             match self {

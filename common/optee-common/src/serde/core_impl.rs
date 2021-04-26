@@ -15,8 +15,8 @@ impl<'de> Deserialize<'de> for &'de [u8] {
             u64::from_le_bytes(array) as usize
         };
 
-        if input.len() < 8 + len {
-            return Err(8 + len);
+        if input.len() < len {
+            return Err(len);
         }
 
         Ok(&input[..len as usize])
@@ -98,6 +98,21 @@ impl<T: SerializeFixed, const N: usize> SerializeFixed for [T; N] {
     }
 }
 
+impl<T: SerializeFixed, const N: usize> Serialize for [T; N] {
+    type Error = T::ErrorFixed;
+
+    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+        let len = T::len() * N;
+        let mut v = vec![0; len];
+
+        match <[T; N] as SerializeFixed>::serialize_fixed(self, &mut v) {
+            Ok(_) => Ok(v),
+            Err(ArrayError::Length(_)) => unreachable!(),
+            Err(ArrayError::Serde(s)) => Err(s),
+        }
+    }
+}
+
 impl<T: DeserializeOwned, const N: usize> DeserializeOwned for [T; N] {
     type ErrorOwned = ArrayError<T::ErrorOwned>;
 
@@ -110,7 +125,7 @@ impl<T: DeserializeOwned, const N: usize> DeserializeOwned for [T; N] {
 
         let mut container: [MaybeUninit<T>; N] = unsafe { MaybeUninit::uninit().assume_init() };
 
-        for (i, input) in input.chunks_exact(T::len()).enumerate() {
+        for (i, input) in input.chunks_exact(T::len()).enumerate().take(N) {
             let item = T::deserialize(input)?;
 
             //we override the uninitialized data with initialized data

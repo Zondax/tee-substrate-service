@@ -71,19 +71,19 @@ pub trait Serialize {
     fn serialize(&self) -> Result<Vec<u8>, Self::Error>;
 }
 
-#[cfg(feature = "alloc")]
-impl<T: SerializeFixed> Serialize for T {
-    type Error = <Self as SerializeFixed>::ErrorFixed;
+// #[cfg(feature = "alloc")]
+// impl<T: SerializeFixed> Serialize for T {
+//     type Error = <Self as SerializeFixed>::ErrorFixed;
 
-    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-        let len = <Self as SerializeFixed>::len();
+//     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+//         let len = <Self as SerializeFixed>::len();
 
-        let mut v = vec![0; len];
-        self.serialize_fixed(&mut v)?;
+//         let mut v = vec![0; len];
+//         self.serialize_fixed(&mut v)?;
 
-        Ok(v)
-    }
-}
+//         Ok(v)
+//     }
+// }
 
 mod common_impl;
 

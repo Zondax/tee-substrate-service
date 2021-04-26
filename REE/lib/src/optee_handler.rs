@@ -7,7 +7,9 @@ use zkms_common::{
     protocol::VRFSignature, HandleRequest, RequestError, RequestMethod, RequestResponse,
 };
 
-use optee_common::{CommandId, Deserialize, DeserializeOwned, Serialize, SerializeFixed};
+use optee_common::{
+    CommandId, Deserialize, DeserializeOwned, DeserializeVariable, Serialize, SerializeFixed,
+};
 
 use crate::invoke_command;
 
@@ -61,18 +63,30 @@ impl HandleRequest for Handler {
                 // we'd reallocate a bigger buffer of the specified size and pass it again, kinda like asking
                 // how many keys we have..
 
-                // Yeah this for now does nothing, until I implement the bigger size required
+                // Yeah this for now only supports 5 keys, until I manage to increase the size
+                // out the output dynamically
+                let algo = crate::utils::convert_crypto_algo_to_optee(algo);
 
-                let mut out = 0u64.to_le_bytes();
-                let vec = 0u64.to_le_bytes();
+                let mut out = vec![0; algo.pubkey_len() * 5]; //just prepare for 5 keys for now
 
-                let p0 = ParamTmpRef::new_input(&vec);
+                let p0 = {
+                    let mut v = vec![0; 1 + 4];
+                    algo.serialize_fixed(&mut v[..1]).unwrap();
+                    key_type.serialize_fixed(&mut v[1..]).unwrap();
+                    v
+                };
+                let p0 = ParamTmpRef::new_input(p0.as_slice());
+
                 let p1 = ParamTmpRef::new_output(&mut out[..]);
 
                 let mut op = Operation::new(p0, p1, ParamNone, ParamNone);
+
                 invoke_command(CommandId::GetKeys.into(), &mut op).map_err(|e| e.to_string())?;
 
-                Ok(RequestResponse::GetPublicKeys { keys: Vec::new() })
+                let (_, keys) = DeserializeVariable::deserialize_variable(&out)
+                    .map_err(|e| format!("malformed output from ta: {:?}", e))?;
+
+                Ok(RequestResponse::GetPublicKeys { keys })
             }
             RequestMethod::SignMessage {
                 algo,
@@ -91,8 +105,8 @@ impl HandleRequest for Handler {
                     let mut vec = vec![0u8; 1 + 4];
                     algo.serialize_fixed(&mut vec[..1]).unwrap();
                     key_type.serialize_fixed(&mut vec[1..]).unwrap();
-                    vec.append(&mut public_key.as_slice().serialize().unwrap());
-                    vec.append(&mut msg.as_slice().serialize().unwrap());
+                    vec.append(&mut (&public_key.as_slice()).serialize().unwrap());
+                    vec.append(&mut (&msg.as_slice()).serialize().unwrap());
                     vec
                 };
                 let p0 = ParamTmpRef::new_input(&vec);
