@@ -64,12 +64,12 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 //generate keypair
                 let keypair = Keypair::generate_new(&mut self.rng, algo);
 
-                let public = keypair.public();
+                let public = keypair.public_bytes();
                 trace!("generated keypair; public = {:x?}", public);
 
                 //copy into output
                 if public.len() > output.len() {
-                    return Err(Error::BadFormat);
+                    return Err(Error::OutOfMemory);
                 }
                 output[..public.len()].copy_from_slice(public);
                 trace!("written public key");
@@ -83,7 +83,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
             CommandId::GetKeys => {
                 //check space for n of keys
                 if output.len() < 8 {
-                    return Err(Error::BadFormat);
+                    return Err(Error::OutOfMemory);
                 }
 
                 let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
@@ -95,30 +95,26 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 trace!("read key_type: {:x?}", key_type);
 
                 //search for key_type associated keypairs of the given curve
-                let keys = self
+                let keys: Vec<Vec<u8>> = self
                     .keys
                     .entry(key_type)
                     .or_default()
                     .iter()
                     .filter(|keypair| keypair == &&algo)
-                    .map(|keypair| keypair.public()); //get the public part of the key
+                    .map(|keypair| keypair.public_bytes().to_vec()) //get the public part of the key
+                    .collect();
+                trace!("got keys={:x?}", keys);
 
-                let mut n_keys_written = 0;
-                for key in keys {
-                    let written_size = 8 + n_keys_written as usize * algo.pubkey_len();
+                use optee_common::Serialize;
+                let keys = keys.serialize().unwrap();
 
-                    if output.len() < written_size {
-                        return Err(Error::BadFormat); //no more space in output
-                    }
-
-                    output[written_size..written_size + algo.pubkey_len()].copy_from_slice(key);
-                    trace!("written n={}; key={:x?}", n_keys_written, key);
-                    n_keys_written += 1;
+                trace!("keys={:?}", keys);
+                if output.len() < keys.len() {
+                    return Err(Error::OutOfMemory);
                 }
 
-                let n_items = n_keys_written as u64;
-                output[..8].copy_from_slice(&n_items.to_le_bytes()[..]);
-                trace!("written items n={}", n_items);
+                output[..keys.len()].copy_from_slice(&keys);
+                trace!("keys written");
 
                 Ok(())
             }
@@ -129,7 +125,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
 
                 //no need to keep going if the output buffer is already too small
                 if algo.signature_len() > output.len() {
-                    return Err(Error::BadFormat)?;
+                    return Err(Error::OutOfMemory)?;
                 }
 
                 let key_type: [u8; 4] =
@@ -155,7 +151,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
 
                 if sig.len() > output.len() {
                     //double check even if we checked at the start
-                    return Err(Error::BadFormat);
+                    return Err(Error::OutOfMemory);
                 }
                 output[..sig.len()].copy_from_slice(&sig);
                 trace!("signature written");
@@ -165,7 +161,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
             CommandId::HasKeys => {
                 //check if we have 1 byte available for the bool output
                 if output.len() < 1 {
-                    return Err(Error::BadFormat);
+                    return Err(Error::OutOfMemory);
                 }
 
                 let (_, pairs): (_, Vec<HasKeysPair>) =
@@ -218,7 +214,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 trace!("signed vrf={:x?}", vrf);
 
                 if vrf.len() > output.len() {
-                    return Err(Error::BadFormat);
+                    return Err(Error::OutOfMemory);
                 }
                 output[..vrf.len()].copy_from_slice(&vrf);
                 trace!("written vrf");
@@ -240,7 +236,7 @@ impl<'r> TaApp<'r> {
     fn find_associated_key(&self, key_type: &[u8; 4], public_key: &[u8]) -> Option<Keypair> {
         self.keys
             .get(key_type)
-            .and_then(|keys| keys.iter().find(|k| k.public() == public_key))
+            .and_then(|keys| keys.iter().find(|k| k.public_bytes() == public_key))
             .cloned()
     }
 }
@@ -268,96 +264,4 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crypto::PublicKey;
-    use optee_common::Serialize;
-
-    impl Default for TaApp<'static> {
-        fn default() -> Self {
-            let rng = Box::new(rand::thread_rng());
-
-            Self {
-                rng: Box::leak(rng),
-                keys: Default::default(),
-            }
-        }
-    }
-
-    impl<'r> TaApp<'r> {
-        fn set_keys(&mut self, keypairs: &[&Keypair]) {
-            let keys: Vec<_> = keypairs.iter().map(|k| (*k).clone()).collect();
-
-            let map: HashMap<[u8; 4], Vec<Keypair>> =
-                [(*b"dumm", keys)].into_iter().cloned().collect();
-            self.keys = map;
-        }
-    }
-
-    fn keypair(algo: CryptoAlgo) -> Keypair {
-        Keypair::generate_new(&mut rand::thread_rng(), algo)
-    }
-
-    fn init_logging() {
-        env_logger::try_init();
-    }
-
-    const KEY_TYPE: [u8; 4] = *b"dumm";
-
-    fn get_random_key(algo: CryptoAlgo) {
-        let mut rng = rand_core::OsRng;
-        let mut app = TaApp::with_rng(&mut rng);
-
-        let mut input = algo.serialize().unwrap();
-        input.append(&mut KEY_TYPE.serialize().unwrap());
-
-        let mut output = Vec::new();
-        output.resize(algo.pubkey_len(), 0);
-
-        app.process_command(CommandId::GenerateNew, &input[..], &mut output)
-            .expect("shouldn't fail");
-
-        let key = PublicKey::from_bytes(algo, &output).expect("not a valid public key");
-        dbg!(key);
-    }
-
-    #[test]
-    fn get_random_keys() {
-        init_logging();
-        get_random_key(CryptoAlgo::Sr25519);
-        get_random_key(CryptoAlgo::Ed25519);
-        get_random_key(CryptoAlgo::Ecdsa);
-    }
-
-    fn sign_something(algo: CryptoAlgo) {
-        let mut rng = rand_core::OsRng;
-        let mut app = TaApp::with_rng(&mut rng);
-
-        let sk = keypair(algo);
-        trace!("genned keypair with public={:x?}", sk.public());
-        app.set_keys(&[&sk]);
-
-        let msg = &b"francesco@zondax.ch"[..];
-
-        let mut input = algo.serialize().unwrap();
-        input.append(&mut KEY_TYPE.serialize().unwrap());
-        input.append(&mut (&sk.public()).serialize().unwrap());
-        input.append(&mut (&msg).serialize().unwrap());
-
-        let mut output = vec![0u8; algo.signature_len()];
-
-        app.process_command(CommandId::SignMessage, &input[..], &mut output)
-            .expect("shouldn't fail");
-
-        let public: PublicKey = sk.into();
-        assert!(public.verify(&mut rng, msg, &output));
-    }
-
-    #[test]
-    fn verify_sign() {
-        init_logging();
-        sign_something(CryptoAlgo::Sr25519);
-        sign_something(CryptoAlgo::Ed25519);
-        sign_something(CryptoAlgo::Ecdsa);
-    }
-}
+mod tests;

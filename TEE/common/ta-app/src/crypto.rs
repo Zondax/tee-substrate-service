@@ -25,7 +25,7 @@ impl Keypair {
         }
     }
 
-    pub fn public(&self) -> &[u8] {
+    pub fn public_bytes(&self) -> &[u8] {
         match self {
             Self::Sr25519(kp) => kp.public(),
             Self::Ed25519(kp) => kp.public(),
@@ -50,6 +50,10 @@ impl Keypair {
             Self::Ed25519(_) | Self::Ecdsa(_) => Err(()),
             Self::Sr25519(kp) => Ok(kp.vrf_sign(rng, data)),
         }
+    }
+
+    pub fn to_public_key(&self) -> PublicKey {
+        self.into()
     }
 }
 
@@ -119,8 +123,8 @@ impl PublicKey {
     }
 }
 
-impl From<Keypair> for PublicKey {
-    fn from(kp: Keypair) -> Self {
+impl From<&Keypair> for PublicKey {
+    fn from(kp: &Keypair) -> Self {
         match kp {
             Keypair::Sr25519(kp) => Self::Sr25519(kp.into()),
             Keypair::Ed25519(kp) => Self::Ed25519(kp.into()),

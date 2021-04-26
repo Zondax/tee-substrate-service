@@ -10,9 +10,8 @@ impl<T: Serialize> Serialize for [T] {
     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
         let len = self.len() as u64;
 
-        let mut vec = vec![0; 8];
         //number of items
-        vec[..8].copy_from_slice(&len.to_le_bytes()[..]);
+        let mut vec = len.to_le_bytes().to_vec();
 
         for item in self.iter() {
             let mut item = item.serialize()?;
@@ -63,16 +62,55 @@ impl Serialize for u8 {
 pub(crate) mod vec {
     use super::*;
 
-    impl<T: Serialize> Serialize for Vec<T> {
-        type Error = T::Error;
+    // impl<T: Serialize> Serialize for Vec<T> {
+    //     type Error = T::Error;
+
+    //     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+    //         <[T] as Serialize>::serialize(&self.as_slice())
+    //     }
+    // }
+
+    impl Serialize for Vec<u8> {
+        type Error = Infallible;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-            <[T] as Serialize>::serialize(&self.as_slice())
+            let len = self.len() as u64;
+
+            Ok([&len.to_le_bytes()[..], self.as_slice()].concat())
         }
     }
 
-    impl<T: Serialize> Serialize for &Vec<T> {
-        type Error = T::Error;
+    impl Serialize for Vec<Vec<u8>> {
+        type Error = Infallible;
+
+        fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+            let mut v = (self.len() as u64).to_le_bytes().to_vec();
+            for inner in self.iter() {
+                v.append(&mut inner.serialize().unwrap())
+            }
+
+            Ok(v)
+        }
+    }
+
+    impl Serialize for Vec<HasKeysPair> {
+        type Error = Infallible;
+
+        fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+            let mut v = (self.len() as u64).to_le_bytes().to_vec();
+            for inner in self.iter() {
+                v.append(&mut inner.serialize()?)
+            }
+
+            Ok(v)
+        }
+    }
+
+    impl<T> Serialize for &Vec<T>
+    where
+        Vec<T>: Serialize,
+    {
+        type Error = <Vec<T> as Serialize>::Error;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
             <Vec<T> as Serialize>::serialize(self)
@@ -104,7 +142,7 @@ pub(crate) mod vec {
 
             let n_items = {
                 let mut array = [0; 8];
-                array.copy_from_slice(input);
+                array.copy_from_slice(&input[..8]);
                 u64::from_le_bytes(array) as usize
             };
 
@@ -158,7 +196,7 @@ impl DeserializeVariable for HasKeysPair {
             return Err(());
         }
 
-        let key: &[u8] = Deserialize::deserialize(&input[12..]).unwrap();
+        let key: &[u8] = Deserialize::deserialize(&input[4..]).unwrap();
         let public_key = key.to_vec();
 
         Ok((
@@ -177,7 +215,7 @@ impl Serialize for crate::CryptoAlgo {
     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
         let len = Self::len();
 
-        let mut v =  vec![0; len];
+        let mut v = vec![0; len];
         self.serialize_fixed(&mut v).unwrap();
 
         Ok(v)
@@ -219,14 +257,13 @@ mod cow {
     //     }
     // }
 
-    impl<'c> Serialize for Cow<'c, [u8]>
-    {
-        type Error = <Vec<u8> as Serialize>::Error;
+    impl<'c> Serialize for Cow<'c, [u8]> {
+        type Error = Infallible;
 
         fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
             match self {
-                Cow::Borrowed(borr) => borr.serialize(),
-                Cow::Owned(own) => own.serialize(),
+                Cow::Borrowed(borr) => (&borr).serialize(),
+                Cow::Owned(own) => (&own).serialize(),
             }
         }
     }
@@ -235,22 +272,22 @@ mod cow {
 mod tuple2 {
     use super::*;
 
-    impl<A: Serialize, B: Serialize> Serialize for (A, B) {
-        type Error = Tuple2Error<A::Error, B::Error>;
+    // impl<A: Serialize, B: Serialize> Serialize for (A, B) {
+    //     type Error = Tuple2Error<A::Error, B::Error>;
 
-        fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
-            let mut a = self.0.serialize().map_err(Tuple2Error::ErrorA)?;
-            let mut b = self.1.serialize().map_err(Tuple2Error::ErrorB)?;
+    //     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+    //         let mut a = self.0.serialize().map_err(Tuple2Error::ErrorA)?;
+    //         let mut b = self.1.serialize().map_err(Tuple2Error::ErrorB)?;
 
-            let mut v = Vec::with_capacity(a.len() + b.len());
-            let midpoint = a.len() as u64;
-            v.extend_from_slice(&midpoint.to_le_bytes()[..]);
-            v.append(&mut a);
-            v.append(&mut b);
+    //         let mut v = Vec::with_capacity(a.len() + b.len());
+    //         let midpoint = a.len() as u64;
+    //         v.extend_from_slice(&midpoint.to_le_bytes()[..]);
+    //         v.append(&mut a);
+    //         v.append(&mut b);
 
-            Ok(v)
-        }
-    }
+    //         Ok(v)
+    //     }
+    // }
 
     impl<A, B> From<ArrayError<usize>> for Tuple2Error<A, B> {
         fn from(err: ArrayError<usize>) -> Self {
@@ -260,24 +297,24 @@ mod tuple2 {
         }
     }
 
-    impl<A: DeserializeVariable, B: DeserializeVariable> DeserializeVariable for (A, B) {
-        type ErrorVariable = Tuple2Error<A::ErrorVariable, B::ErrorVariable>;
+    // impl<A: DeserializeVariable, B: DeserializeVariable> DeserializeVariable for (A, B) {
+    //     type ErrorVariable = Tuple2Error<A::ErrorVariable, B::ErrorVariable>;
 
-        fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable> {
-            let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
-            let midpoint = u64::from_le_bytes(midpoint) as usize;
+    //     fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable> {
+    //         let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
+    //         let midpoint = u64::from_le_bytes(midpoint) as usize;
 
-            let (size_a, a) = DeserializeVariable::deserialize_variable(&input[8..])
-                .map_err(Tuple2Error::ErrorA)?;
+    //         let (size_a, a) = DeserializeVariable::deserialize_variable(&input[8..])
+    //             .map_err(Tuple2Error::ErrorA)?;
 
-            if size_a != midpoint {
-                return Err(Tuple2Error::Length(midpoint));
-            }
+    //         if size_a != midpoint {
+    //             return Err(Tuple2Error::Length(midpoint));
+    //         }
 
-            let (size_b, b) = DeserializeVariable::deserialize_variable(&input[8 + size_a..])
-                .map_err(Tuple2Error::ErrorB)?;
+    //         let (size_b, b) = DeserializeVariable::deserialize_variable(&input[8 + size_a..])
+    //             .map_err(Tuple2Error::ErrorB)?;
 
-            Ok(((size_a + size_b), (a, b)))
-        }
-    }
+    //         Ok(((size_a + size_b), (a, b)))
+    //     }
+    // }
 }

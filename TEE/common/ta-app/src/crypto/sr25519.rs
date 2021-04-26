@@ -102,8 +102,8 @@ impl PublicKey {
     }
 }
 
-impl From<Keypair> for PublicKey {
-    fn from(pair: Keypair) -> Self {
+impl From<&Keypair> for PublicKey {
+    fn from(pair: &Keypair) -> Self {
         Self(pair.0.public)
     }
 }
@@ -115,13 +115,13 @@ mod vrf {
         Deserialize, DeserializeOwned,
     };
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub enum VRFValue<'de> {
         Bytes(&'de [u8]),
         U64(u64),
     }
 
-    #[derive(Debug)]
+    #[derive(Clone, Debug)]
     pub struct VRFData<'de> {
         label: &'de [u8],
         items: crate::Vec<(&'de [u8], VRFValue<'de>)>,
@@ -209,7 +209,7 @@ mod vrf {
                     Ok(Self::Bytes(bytes))
                 }
                 1 => {
-                    let bytes: [u8; 8] = DeserializeOwned::deserialize_owned(&input[0..])?;
+                    let bytes: [u8; 8] = DeserializeOwned::deserialize_owned(&input[1..])?;
                     let num = u64::from_le_bytes(bytes);
                     Ok(Self::U64(num))
                 }
@@ -233,7 +233,7 @@ mod vrf {
         fn deserialize(mut input: &'de [u8]) -> Result<Self, Self::Error> {
             //get the label
             let label: &[u8] = Deserialize::deserialize(input)?;
-            crate::util::advance_slice(&mut input, label.len()).unwrap();
+            crate::util::advance_slice(&mut input, 8 + label.len()).unwrap();
 
             //get the number of items
             let n_items: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
@@ -248,8 +248,8 @@ mod vrf {
                 let item_size = u64::from_le_bytes(item_size) as usize;
 
                 //deserialize item
-                let item = Deserialize::deserialize(input)?;
-                crate::util::advance_slice(&mut input, item_size).unwrap(); //and advance input by len
+                let item = Deserialize::deserialize(&input[8.. 8 + item_size])?;
+                crate::util::advance_slice(&mut input, 8 + item_size).unwrap(); //and advance input by len
 
                 //add to collection
                 items.push(item);

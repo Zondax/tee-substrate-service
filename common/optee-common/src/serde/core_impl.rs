@@ -146,10 +146,11 @@ mod tuple2 {
         fn deserialize(input: &'de [u8]) -> Result<Self, Self::Error> {
             let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
             let midpoint = u64::from_le_bytes(midpoint) as usize;
+            let input = &input[8..];
 
-            let a = Deserialize::deserialize(&input[8..midpoint]).map_err(Tuple2Error::ErrorA)?;
+            let a = Deserialize::deserialize(&input[..midpoint]).map_err(Tuple2Error::ErrorA)?;
             let b =
-                Deserialize::deserialize(&input[8 + midpoint..]).map_err(Tuple2Error::ErrorB)?;
+                Deserialize::deserialize(&input[midpoint..]).map_err(Tuple2Error::ErrorB)?;
 
             Ok((a, b))
         }

@@ -67,7 +67,7 @@ impl HandleRequest for Handler {
                 // out the output dynamically
                 let algo = crate::utils::convert_crypto_algo_to_optee(algo);
 
-                let mut out = vec![0; algo.pubkey_len() * 5]; //just prepare for 5 keys for now
+                let mut out = vec![0; 8 + (8 + algo.pubkey_len()) * 5]; //just prepare for 5 keys for now
 
                 let p0 = {
                     let mut v = vec![0; 1 + 4];

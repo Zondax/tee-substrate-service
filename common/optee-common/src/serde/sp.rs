@@ -13,7 +13,12 @@ impl Serialize for VRFTranscriptValue {
 
     fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
         match self {
-            VRFTranscriptValue::Bytes(bytes) => Ok([&[0], bytes.as_slice()].concat()),
+            VRFTranscriptValue::Bytes(bytes) => {
+                let len = bytes.len() as u64;
+                let len = len.to_le_bytes();
+
+                Ok([&[0], &len[..], bytes.as_slice()].concat())
+            }
             VRFTranscriptValue::U64(num) => Ok([&[1], &num.to_le_bytes()[..]].concat()),
         }
     }
@@ -54,13 +59,12 @@ impl DeserializeVariable for VRFTranscriptValue {
             0 => {
                 let (len, bytes): (_, Vec<u8>) =
                     DeserializeVariable::deserialize_variable(&input[1..])?;
-                Ok((len, Self::Bytes(bytes)))
+                Ok((1 + len, Self::Bytes(bytes)))
             }
             1 => {
-                let (len, num): (_, [u8; 8]) =
-                    DeserializeVariable::deserialize_variable(&input[1..])?;
+                let num: [u8; 8] = DeserializeOwned::deserialize_owned(&input[1..])?;
                 let num = u64::from_le_bytes(num);
-                Ok((len, Self::U64(num)))
+                Ok((9, Self::U64(num)))
             }
             err => return Err(VRFTranscriptValueError::UnknownVariant(err)),
         }
@@ -74,12 +78,49 @@ impl Serialize for VRFTranscriptData {
         let mut v = Vec::with_capacity(self.label.len());
 
         let label: &[u8] = self.label.borrow();
-        v.append(&mut label.serialize().unwrap());
+        v.append(&mut (&label).serialize().unwrap());
 
         //all errors are Infallible
-        v.append(&mut self.items.serialize().unwrap());
+        let mut items = self.items.serialize().unwrap();
+        v.append(&mut items);
 
         Ok(v)
+    }
+}
+
+impl<'c> Serialize for (std::borrow::Cow<'c, [u8]>, VRFTranscriptValue) {
+    type Error = Infallible;
+
+    fn serialize(&self) -> Result<Vec<u8>, Self::Error> {
+        let mut a = self.0.serialize()?;
+        let mut b = self.1.serialize()?;
+
+        let midpoint = a.len() as u64;
+
+        let mut v = midpoint.to_le_bytes().to_vec();
+        v.append(&mut a);
+        v.append(&mut b);
+
+        Ok(v)
+    }
+}
+
+impl<'c> DeserializeVariable for (Vec<u8>, VRFTranscriptValue) {
+    type ErrorVariable = Tuple2Error<VecError<usize>, VRFTranscriptValueError>;
+
+    fn deserialize_variable(input: &[u8]) -> Result<(usize, Self), Self::ErrorVariable> {
+        let input = &input[8..]; //skip total size
+
+        let midpoint: [u8; 8] = DeserializeOwned::deserialize_owned(input)?;
+        let midpoint = u64::from_le_bytes(midpoint) as usize;
+
+        let input = &input[8..];
+        let (_, a) = DeserializeVariable::deserialize_variable(&input[..midpoint])
+            .map_err(Tuple2Error::ErrorA)?;
+        let (size_b, b) = DeserializeVariable::deserialize_variable(&input[midpoint..])
+            .map_err(Tuple2Error::ErrorB)?;
+
+        Ok(((8 + midpoint + size_b), (a, b)))
     }
 }
 

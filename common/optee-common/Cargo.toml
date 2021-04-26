@@ -7,7 +7,7 @@ edition = "2018"
 [features]
 default = ["alloc"]
 alloc = ["no-std-compat/alloc"]
-sp = ["sp-keystore", "sp-core", "alloc"]
+sp = ["sp-keystore", "sp-core", "alloc", "no-std-compat/std"]
 
 [lib]
 name = "optee_common"

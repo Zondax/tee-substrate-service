@@ -60,8 +60,8 @@ impl PublicKey {
     }
 }
 
-impl From<Keypair> for PublicKey {
-    fn from(pair: Keypair) -> Self {
+impl From<&Keypair> for PublicKey {
+    fn from(pair: &Keypair) -> Self {
         Self(pair.0.public)
     }
 }
