@@ -46,6 +46,39 @@ pub fn advance_slice(slice: &mut &[u8], amt: usize) -> Result<(), Error> {
     }
 }
 
+pub mod hasher {
+    use core::hash::{BuildHasher, Hasher};
+
+    #[derive(Default)]
+    pub struct Builder;
+
+    ///This hasher is not cryptographically secure or resistant to collisions
+    /// the key for this hasher is only every supposed to be an [u8; 4]
+    pub struct MyHasher(u32);
+
+    impl BuildHasher for Builder {
+        type Hasher = MyHasher;
+
+        fn build_hasher(&self) -> Self::Hasher {
+            MyHasher(0)
+        }
+    }
+
+    impl Hasher for MyHasher {
+        fn finish(&self) -> u64 {
+            self.0 as u64
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            let mut inner = [0; 4];
+            for (i, b) in bytes.iter().take(4).enumerate() {
+                inner[i] = *b;
+            }
+            self.0 = u32::from_le_bytes(inner);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

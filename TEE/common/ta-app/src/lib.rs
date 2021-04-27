@@ -23,7 +23,7 @@ use crypto::Keypair;
 extern crate log;
 
 pub struct TaApp<'r> {
-    keys: HashMap<[u8; 4], Vec<Keypair>>,
+    keys: HashMap<[u8; 4], Vec<Keypair>, util::hasher::Builder>,
     rng: &'r mut dyn CSPRNG, //the rng provider
 }
 
@@ -229,7 +229,7 @@ impl<'r> TaApp<'r> {
     pub fn with_rng<R: CryptoRng + RngCore + 'r>(rng: &'r mut R) -> Self {
         Self {
             rng: rng as _,
-            keys: Default::default(),
+            keys: HashMap::with_hasher(Default::default()),
         }
     }
 

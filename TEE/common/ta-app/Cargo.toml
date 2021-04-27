@@ -22,7 +22,7 @@ ed25519-dalek = { version = "1", features = ["u64_backend", "alloc"], default-fe
 
 #misc
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
-hashbrown = { version = "0.11", default-features = false, features = ["inline-more", "ahash-compile-time-rng"] }
+hashbrown = { version = "0.11", default-features = false, features = ["inline-more"] }
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["std"] }

@@ -12,7 +12,7 @@ impl Default for TaApp<'static> {
 
         Self {
             rng: Box::leak(rng),
-            keys: Default::default(),
+            keys: hashbrow::HashMap::with_hasher(Default::default()),
         }
     }
 }
