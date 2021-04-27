@@ -1,32 +1,28 @@
 use futures::future::Future;
-
 use futures::future::TryFutureExt;
-use jsonrpc_core_client::transports::http::connect;
-use schnorrkel::{PublicKey, Signature};
-use zkms_jsonrpc::ZKMSClient;
+
+mod client;
+use client::Client;
+
+use zkms_common::CryptoAlgo;
+use zkms_ductile::{
+    crypto::{self, Pair as _},
+    ecdsa, ed25519, sr25519,
+};
 
 pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
     info!("Connecting testing client...");
-    let client = get_client(
-        addr.to_socket_addrs()
-            .expect("unable to construct address list")
-            .next()
-            .expect("no valid address provided"),
-    )
-    .await;
+    let client = Client::connect(addr).expect("server not running!");
 
     info!("TESTS STARTING");
 
     Test::new(
         "generateNew 00",
-        "generate new keypair and return a public key; no seed",
+        "generate new sr25519 keypair and return a public key; no seed",
         async {
-            let key = client
-                .generate_new(None)
-                .await
+            client
+                .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
-            PublicKey::from_bytes(&key[..])
-                .map_err(|e| format!("public key was not valid: {:?}", e))?; //verify that key is valid
             Ok::<_, String>(())
         },
     )
@@ -38,39 +34,28 @@ pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
         "sign a message and verify signature",
         async {
             let key = client
-                .generate_new(None)
-                .await
+                .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
-            let public_key = PublicKey::from_bytes(&key[..])
-                .map_err(|e| format!("public key was not valid: {:?}", e))?; //verify that key is valid
 
             const MSG: &[u8] = "francesco@zondax.ch".as_bytes();
 
             let sign = client
-                .sign_message(key, MSG.to_vec())
-                .await
+                .sign_with(CryptoAlgo::Sr25519, key.to_vec(), MSG)
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
 
-            let sign = Signature::from_bytes(&sign[..])
-                .map_err(|e| format!("signature could not be deserialized: {:?}", e))?;
+            let sign = sr25519::Signature::from_slice(&sign[..]);
 
-            public_key
-                .verify_simple(b"zondax", MSG, &sign)
-                .map_err(|e| format!("signature was not valid: {:?}", e))
+            if sr25519::Pair::verify(&sign, MSG, &key) {
+                Ok(())
+            } else {
+                Err("Signature was not valid".to_string())
+            }
         },
     )
     .exec_fut()
     .await;
 
     info!("TESTS FINISHED");
-}
-
-async fn get_client(addr: std::net::SocketAddr) -> ZKMSClient {
-    let addr = format!("http://{}", addr);
-
-    connect::<ZKMSClient>(&addr)
-        .await
-        .expect("unable to connect to jsonrpc server")
 }
 
 struct Test<'s, F> {

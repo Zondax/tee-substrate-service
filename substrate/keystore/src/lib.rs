@@ -66,7 +66,7 @@ impl TEEKeystore {
 
 impl TEEKeystore {
     fn client(&self) -> parking_lot::RwLockReadGuard<'_, Option<ZKMSClient>> {
-        self.connect();
+        let _ = self.connect();
         self.client.read()
     }
 

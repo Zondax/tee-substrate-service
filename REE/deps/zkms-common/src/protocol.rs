@@ -24,7 +24,17 @@ impl std::convert::TryFrom<[u8; 4]> for CryptoAlgo {
             sr25519::CRYPTO_ID => Ok(CryptoAlgo::Sr25519),
             ed25519::CRYPTO_ID => Ok(CryptoAlgo::Ed25519),
             ecdsa::CRYPTO_ID => Ok(CryptoAlgo::Ecdsa),
-            _ => Err(())
+            _ => Err(()),
+        }
+    }
+}
+
+impl Into<[u8; 4]> for CryptoAlgo {
+    fn into(self) -> [u8; 4] {
+        match self {
+            Self::Sr25519 => sr25519::CRYPTO_ID.0,
+            Self::Ed25519 => ed25519::CRYPTO_ID.0,
+            Self::Ecdsa => ecdsa::CRYPTO_ID.0,
         }
     }
 }
@@ -67,21 +77,11 @@ pub enum RequestMethod {
 #[cfg_attr(feature = "serde_", derive(serde::Deserialize, serde::Serialize))]
 #[derive(Debug)]
 pub enum RequestResponse {
-    GenerateNew {
-        public_key: Vec<u8>,
-    },
-    GetPublicKeys {
-        keys: Vec<Vec<u8>>,
-    },
-    HasKeys {
-        all: bool,
-    },
-    SignMessage {
-        signature: Vec<u8>,
-    },
-    VrfSign {
-        signature: VRFSignature,
-    },
+    GenerateNew { public_key: Vec<u8> },
+    GetPublicKeys { keys: Vec<Vec<u8>> },
+    HasKeys { all: bool },
+    SignMessage { signature: Vec<u8> },
+    VrfSign { signature: VRFSignature },
 }
 
 #[derive(thiserror::Error, Debug)]

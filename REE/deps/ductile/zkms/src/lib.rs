@@ -1,6 +1,6 @@
 pub use sp_core::{crypto, ecdsa, ed25519, sr25519};
 pub use sp_keystore::{
-    vrf::{VRFSignature, VRFTranscriptData},
+    vrf::{VRFSignature, VRFTranscriptData, VRFTranscriptValue},
     Error as KeystoreError,
 };
 

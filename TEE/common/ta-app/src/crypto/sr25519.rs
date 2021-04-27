@@ -37,9 +37,14 @@ impl Keypair {
 
     pub fn vrf_sign<C: CSPRNG>(&self, rng: &mut C, data: vrf::VRFData<'_>) -> crate::Vec<u8> {
         let t = vrf::make_transcript(data);
-        let t = schnorrkel::context::attach_rng(t, rng);
 
-        let (inout, proof, _) = self.0.vrf_sign(t);
+        //see: https://github.com/w3f/schnorrkel/issues/70
+        let extra = {
+            let t = merlin::Transcript::new(b"VRF");
+            schnorrkel::context::attach_rng(t, rng)
+        };
+
+        let (inout, proof, _) = self.0.vrf_sign_extra(t, extra);
         let preout = inout.to_preout();
 
         let preout = preout.to_bytes();
@@ -82,8 +87,9 @@ impl PublicKey {
             Ok(midpoint) => midpoint,
         };
         let midpoint = u64::from_le_bytes(midpoint) as usize;
+        let sig = &sig[8..];
 
-        let preout = &sig[8..midpoint];
+        let preout = &sig[..midpoint];
         let preout = match VRFPreOut::from_bytes(preout) {
             Err(_) => return false,
             Ok(preout) => preout,
@@ -96,9 +102,14 @@ impl PublicKey {
         };
 
         let t = vrf::make_transcript(data);
-        let t = schnorrkel::context::attach_rng(t, rng);
 
-        self.0.vrf_verify(t, &preout, &proof).is_ok()
+        //see: https://github.com/w3f/schnorrkel/issues/70
+        let extra = {
+            let t = merlin::Transcript::new(b"VRF");
+            schnorrkel::context::attach_rng(t, rng)
+        };
+
+        self.0.vrf_verify_extra(t, &preout, &proof, extra).is_ok()
     }
 }
 
@@ -248,7 +259,7 @@ mod vrf {
                 let item_size = u64::from_le_bytes(item_size) as usize;
 
                 //deserialize item
-                let item = Deserialize::deserialize(&input[8.. 8 + item_size])?;
+                let item = Deserialize::deserialize(&input[8..8 + item_size])?;
                 crate::util::advance_slice(&mut input, 8 + item_size).unwrap(); //and advance input by len
 
                 //add to collection

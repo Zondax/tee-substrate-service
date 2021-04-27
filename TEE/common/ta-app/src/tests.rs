@@ -210,7 +210,6 @@ fn get_vrf() -> (Transcript, VRFTranscriptData) {
 }
 
 #[test]
-#[ignore = "https://github.com/w3f/schnorrkel/issues/70"]
 fn verify_vrf_sign() {
     init_logging();
     let mut app = TaApp::default();

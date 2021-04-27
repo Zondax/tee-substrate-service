@@ -250,9 +250,10 @@ impl DeserializeOwned for VRFSignature {
         if midpoint != 32 {
             return Err(VRFSignatureError::Length(midpoint));
         }
+        let input = &input[8..];
 
-        let preout: [u8; 32] = DeserializeOwned::deserialize_owned(&input[8..midpoint])?;
-        let proof: [u8; 64] = DeserializeOwned::deserialize_owned(&input[8 + midpoint..])?;
+        let preout: [u8; 32] = DeserializeOwned::deserialize_owned(&input[..midpoint])?;
+        let proof: [u8; 64] = DeserializeOwned::deserialize_owned(&input[midpoint..])?;
 
         let output = VRFOutput::from_bytes(&preout)?;
         let proof = VRFProof::from_bytes(&proof)?;

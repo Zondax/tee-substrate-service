@@ -10,7 +10,7 @@ edition = "2018"
 host-common = { version = "0.1", features = ["serde"], path = "../../host-common" }
 
 zkms-ductile = { version = "0.1", path = "../zkms" }
-ductile = { version = "0.1", git = "https://github.com/becominginsane/ductile" }
+ductile = { version = "0.1" }
 
 tokio = { version = "0.2", features = ["blocking"] }
 futures = "0.3"
