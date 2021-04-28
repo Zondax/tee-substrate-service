@@ -7,7 +7,7 @@ use std::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{
     CommandId, CryptoAlgo, Deserialize, DeserializeOwned, DeserializeVariable, HandleTaCommand,
-    HasKeysPair, SerializeFixed, TeeErrorCode as Error,
+    HasKeysPair, Serialize, SerializeFixed, TeeErrorCode as Error,
 };
 use rand_core::{CryptoRng, RngCore};
 
@@ -65,7 +65,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 let keypair = Keypair::generate_new(&mut self.rng, algo);
 
                 let public = keypair.public_bytes();
-                trace!("generated keypair; public = {:x?}", public);
+                trace!("generated keypair");
 
                 //copy into output
                 if public.len() > output.len() {
@@ -103,12 +103,11 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                     .filter(|keypair| keypair == &&algo)
                     .map(|keypair| keypair.public_bytes().to_vec()) //get the public part of the key
                     .collect();
-                trace!("got keys={:x?}", keys);
+                trace!("got keys");
 
-                use optee_common::Serialize;
                 let keys = keys.serialize().unwrap();
 
-                trace!("keys={:?}", keys);
+                trace!("keys serialized");
                 if output.len() < keys.len() {
                     return Err(Error::OutOfMemory);
                 }
@@ -136,10 +135,10 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 let public: &[u8] =
                     Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
                 util::advance_slice(&mut input, 8 + public.len()).unwrap();
-                trace!("read public key: {:x?}", public);
+                trace!("read public key");
 
                 let msg: &[u8] = Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
-                trace!("read msg: {:x?}", msg);
+                trace!("read msg");
 
                 let pair = self
                     .find_associated_key(&key_type, public)
@@ -147,7 +146,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 trace!("got keypair");
 
                 let sig = pair.sign(&mut self.rng, &msg);
-                trace!("signed! sig={:x?}", sig);
+                trace!("signed!");
 
                 if sig.len() > output.len() {
                     //double check even if we checked at the start
@@ -167,7 +166,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 let (_, pairs): (_, Vec<HasKeysPair>) =
                     DeserializeVariable::deserialize_variable(input)
                         .map_err(|_| Error::BadFormat)?;
-                trace!("read HasKeysPair: {:?}", pairs);
+                trace!("read HasKeysPair");
 
                 let search = pairs.into_iter().all(
                     |HasKeysPair {
@@ -194,24 +193,24 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 util::advance_slice(&mut input, 4).unwrap();
                 trace!("read key_type: {:x?}", key_type);
 
-                let public: &[u8] =
-                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
-                util::advance_slice(&mut input, 8 + public.len()).unwrap();
-                trace!("got public key={:x?}", public);
+                let public: [u8; 32] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 32).unwrap();
+                trace!("got public key");
 
                 let pair = self
-                    .find_associated_key(&key_type, public)
+                    .find_associated_key(&key_type, &public)
                     .ok_or(Error::BadParameters)?;
                 trace!("found keypair");
 
                 let data: crypto::VRFData =
                     Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
-                trace!("got vrf data = {:?}", data);
+                trace!("got vrf data");
 
                 let vrf = pair
                     .vrf_sign(&mut self.rng, data)
                     .map_err(|_| Error::BadParameters)?;
-                trace!("signed vrf={:x?}", vrf);
+                trace!("signed vrf");
 
                 if vrf.len() > output.len() {
                     return Err(Error::OutOfMemory);
@@ -229,7 +228,7 @@ impl<'r> TaApp<'r> {
     pub fn with_rng<R: CryptoRng + RngCore + 'r>(rng: &'r mut R) -> Self {
         Self {
             rng: rng as _,
-            keys: HashMap::with_hasher(Default::default()),
+            keys: crypto::default_set(),
         }
     }
 

@@ -19,10 +19,7 @@ impl Clone for Keypair {
         let secret = self.secret.to_bytes();
         let secret = SigningKey::from_bytes(&secret).unwrap();
 
-        Self {
-            secret,
-            public: self.public,
-        }
+        secret.into()
     }
 }
 
@@ -33,9 +30,14 @@ impl Keypair {
 
         //not gonna error since length is ok
         let secret = SigningKey::from_bytes(&seed).unwrap();
-        let public = secret.verify_key().to_bytes();
 
-        Self { secret, public }
+        secret.into()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let secret = SigningKey::from_bytes(bytes).ok()?;
+
+        Some(secret.into())
     }
 
     pub fn public(&self) -> &[u8] {
@@ -89,5 +91,14 @@ impl PublicKey {
 impl From<&Keypair> for PublicKey {
     fn from(pair: &Keypair) -> Self {
         Self(pair.secret.verify_key())
+    }
+}
+
+impl From<SigningKey> for Keypair {
+    fn from(secret: SigningKey) -> Self {
+        Self {
+            public: secret.verify_key().to_bytes(),
+            secret,
+        }
     }
 }

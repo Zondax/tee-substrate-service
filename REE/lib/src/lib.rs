@@ -43,10 +43,19 @@ pub extern "C" fn run() -> u32 {
 
     env_logger::init();
 
+    let mut rt_builder = tokio::runtime::Builder::new();
+    rt_builder.enable_all();
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "ci")] {
+            rt_builder.threaded_scheduler();
+        } else {
+            rt_builder.basic_scheduler();
+        }
+    }
+
     //create tokio runtime for the application
-    let mut rt = tokio::runtime::Builder::new()
-        .basic_scheduler()
-        .enable_all()
+    let mut rt = rt_builder
         .build()
         .expect("unable to initialize tokio runtime");
 

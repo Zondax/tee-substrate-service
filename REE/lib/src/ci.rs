@@ -19,20 +19,19 @@ pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
     Test::new(
         "generateNew 00",
         "generate new sr25519 keypair and return a public key; no seed",
-        async {
+        || {
             client
                 .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
             Ok::<_, String>(())
         },
     )
-    .exec_fut()
-    .await;
+    .exec();
 
     Test::new(
         "signMessage 00",
-        "sign a message and verify signature",
-        async {
+        "sign a message with sr25519 and verify signature",
+        || {
             let key = client
                 .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
@@ -52,8 +51,98 @@ pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
             }
         },
     )
-    .exec_fut()
-    .await;
+    .exec();
+
+    Test::new(
+        "getPublicKeys 00",
+        "attempt to retrieve sr25519 public keys",
+        || {
+            let keys = client.sr25519_public_keys();
+
+            debug!("sr25519 keys={:x?}", keys);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
+
+    Test::new(
+        "getPublicKeys 01",
+        "attempt to retrieve sr25519 public keys, min 1",
+        || {
+            let _ = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("unable to make request: {:?}", e))?;
+
+            let keys = client.sr25519_public_keys();
+
+            debug!("sr25519 keys={:x?}", keys);
+
+            if keys.len() < 1 {
+                Err("at least 1 key should be present".to_string())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .exec();
+
+    Test::new(
+        "hasKeys 00",
+        "attempt to check presence of non existing keys",
+        || {
+            let query = vec![vec![0; 32]];
+
+            let search = client.has_keys(query.clone());
+
+            debug!("haskeys; query={:x?}, search={}", query, search);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
+
+    Test::new(
+        "hasKeys 01",
+        "attempt to check presence of freshly generated key",
+        || {
+            let pk = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("failed to issue request: {:?}", e))?;
+
+            let query = vec![pk.0.to_vec()];
+
+            let search = client.has_keys(query.clone());
+
+            debug!("haskeys; query={:x?}, search={}", query, search);
+
+            if !search {
+                Err("search not ok".to_string())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .exec();
+
+    Test::new(
+        "vrfSign 00",
+        "attempt to sign vrf with freshly generated key",
+        || {
+            let pk = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("failed to issue request: {:?}", e))?;
+
+            let vrf = client
+                .sr25519_vrf_sign(&pk)
+                .map_err(|e| format!("failed to issue reqiest: {:?}", e))?;
+
+            debug!("vrf={:x?}", vrf);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
 
     info!("TESTS FINISHED");
 }
@@ -119,7 +208,7 @@ where
 
         info!("[REMOTEE TEST {}]: START", name);
         debug!("[REMOTEE TEST {}]: {}", name, description);
-        let result = (logic)();
+        let result = tokio::task::block_in_place(|| (logic)());
         match result {
             Ok(_) => {
                 info!("[REMOTEE TEST {}]: SUCCESS", name);

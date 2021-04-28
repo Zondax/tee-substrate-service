@@ -7,7 +7,7 @@ use zkms_ductile::{RemoteKeystore, RemoteKeystoreResponse};
 extern crate tracing;
 
 /// Will start the ductile service as configured and return a list of incoming service requests
-pub async fn start_service<E: Send + 'static>(
+pub async fn start_service<E: std::fmt::Debug + Send + 'static>(
     addr: impl ToSocketAddrs + Send + 'static,
 ) -> impl futures::Stream<Item = Result<ServiceRequest<E>, E>> {
     use futures::SinkExt;
@@ -137,7 +137,7 @@ fn translate_request(request: RemoteKeystore) -> Result<RequestMethod, RemoteKey
     }
 }
 
-fn translate_response<E: Send + 'static>(
+fn translate_response<E: std::fmt::Debug + Send + 'static>(
     original_request: &RequestMethod,
     response: Result<RequestResponse, E>,
 ) -> RemoteKeystoreResponse {
@@ -211,10 +211,30 @@ fn translate_response<E: Send + 'static>(
                 RemoteKeystoreResponse::Sr25519VrfSign(Ok(signature))
             }
         },
-        Err(_) => {
-            //probably need to wrap error so that RequestError -> sp_keystore::Error...
-            // also might need to pass the request to properly construct response
-            todo!("handle error outside response")
-        }
+        Err(err) => match original_request {
+            RequestMethod::GenerateNew { algo, .. } => match algo {
+                CryptoAlgo::Sr25519 => RemoteKeystoreResponse::Sr25519GenerateNew(Err(
+                    Error::Other(format!("{:?}", err)),
+                )),
+                CryptoAlgo::Ed25519 => RemoteKeystoreResponse::Ed25519GenerateNew(Err(
+                    Error::Other(format!("{:?}", err)),
+                )),
+                CryptoAlgo::Ecdsa => RemoteKeystoreResponse::EcdsaGenerateNew(Err(Error::Other(
+                    format!("{:?}", err),
+                ))),
+            },
+            RequestMethod::GetPublicKeys { algo, .. } => match algo {
+                CryptoAlgo::Sr25519 => RemoteKeystoreResponse::Sr25519PublicKeys(vec![]),
+                CryptoAlgo::Ed25519 => RemoteKeystoreResponse::Ed25519PublicKeys(vec![]),
+                CryptoAlgo::Ecdsa => RemoteKeystoreResponse::EcdsaPublicKeys(vec![]),
+            },
+            RequestMethod::HasKeys { .. } => RemoteKeystoreResponse::HasKeys(false),
+            RequestMethod::SignMessage { .. } => {
+                RemoteKeystoreResponse::SignWith(Err(Error::Other(format!("{:?}", err))))
+            }
+            RequestMethod::VrfSign { .. } => {
+                RemoteKeystoreResponse::Sr25519VrfSign(Err(Error::Other(format!("{:?}", err))))
+            }
+        },
     }
 }

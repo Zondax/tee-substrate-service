@@ -14,23 +14,32 @@ impl Keypair {
         Self(keys::Keypair::generate_with(rng))
     }
 
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        match bytes.len() {
+            32 => Some(Self(
+                keys::MiniSecretKey::from_bytes(bytes)
+                    .ok()?
+                    .expand_to_keypair(keys::ExpansionMode::Ed25519),
+            )),
+            64 => Some(Self(keys::SecretKey::from_bytes(bytes).ok()?.to_keypair())),
+            _ => None,
+        }
+    }
+
     pub fn public(&self) -> &[u8] {
         self.0.public.as_ref()
     }
 
-    fn get_transcript<'rng, C: CSPRNG + 'rng>(
-        rng: &'rng mut C,
-        msg: &[u8],
-    ) -> schnorrkel::context::SigningTranscriptWithRng<merlin::Transcript, &'rng mut C> {
+    fn get_transcript(msg: &[u8]) -> merlin::Transcript {
         let mut t = merlin::Transcript::new(b"SigningContext");
         t.append_message(b"", b"substrate"); //ctx
         t.append_message(b"sign-bytes", msg);
-
-        schnorrkel::context::attach_rng(t, rng)
+        t
     }
 
     pub fn sign<C: CSPRNG>(&self, rng: &mut C, msg: &[u8]) -> [u8; 64] {
-        let t = Self::get_transcript(rng, msg);
+        let t = Self::get_transcript(msg);
+        let t = schnorrkel::context::attach_rng(t, rng);
 
         self.0.sign(t).to_bytes()
     }
@@ -66,18 +75,18 @@ impl PublicKey {
         keys::PublicKey::from_bytes(bytes).map(Self)
     }
 
-    pub fn verify<C: CSPRNG>(&self, rng: &mut C, msg: &[u8], sig: &[u8; 64]) -> bool {
+    pub fn verify(&self, msg: &[u8], sig: &[u8; 64]) -> bool {
         let sig = match Signature::from_bytes(&sig[..]) {
             Ok(sig) => sig,
             Err(_) => return false,
         };
 
-        let transcript = Keypair::get_transcript(rng, msg);
+        let transcript = Keypair::get_transcript(msg);
 
         self.0.verify(transcript, &sig).is_ok()
     }
 
-    pub fn verify_vrf<C: CSPRNG>(&self, rng: &mut C, data: vrf::VRFData<'_>, sig: &[u8]) -> bool {
+    pub fn verify_vrf(&self, data: vrf::VRFData<'_>, sig: &[u8]) -> bool {
         if sig.len() < 8 + 32 + 64 {
             return false;
         }
@@ -103,13 +112,7 @@ impl PublicKey {
 
         let t = vrf::make_transcript(data);
 
-        //see: https://github.com/w3f/schnorrkel/issues/70
-        let extra = {
-            let t = merlin::Transcript::new(b"VRF");
-            schnorrkel::context::attach_rng(t, rng)
-        };
-
-        self.0.vrf_verify_extra(t, &preout, &proof, extra).is_ok()
+        self.0.vrf_verify(t, &preout, &proof).is_ok()
     }
 }
 

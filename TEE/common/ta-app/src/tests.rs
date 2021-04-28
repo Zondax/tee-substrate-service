@@ -1,7 +1,6 @@
-use crate::crypto::VRFData;
-
 use super::*;
-use crypto::PublicKey;
+
+use crypto::{PublicKey, VRFData};
 use merlin::Transcript;
 use optee_common::Serialize;
 use sp_keystore::vrf::{VRFSignature, VRFTranscriptData};
@@ -12,7 +11,7 @@ impl Default for TaApp<'static> {
 
         Self {
             rng: Box::leak(rng),
-            keys: hashbrow::HashMap::with_hasher(Default::default()),
+            keys: crypto::default_set(),
         }
     }
 }
@@ -21,7 +20,7 @@ impl<'r> TaApp<'r> {
     fn set_keys(&mut self, keypairs: &[&Keypair]) {
         let keys: Vec<_> = keypairs.iter().map(|k| (*k).clone()).collect();
 
-        let mut map = HashMap::new();
+        let mut map = HashMap::with_hasher(Default::default());
         map.insert(KEY_TYPE, keys);
 
         self.keys = map;
@@ -81,7 +80,7 @@ fn sign_something(algo: CryptoAlgo) {
         .expect("shouldn't fail");
 
     let public = sk.to_public_key();
-    assert!(public.verify(&mut rand::thread_rng(), msg, &output));
+    assert!(public.verify(msg, &output));
 }
 
 #[test]
@@ -215,7 +214,13 @@ fn verify_vrf_sign() {
     let mut app = TaApp::default();
 
     let sk = keypair(CryptoAlgo::Sr25519);
-    trace!("genned keypair with public={:x?}", sk.public_bytes());
+    let public = sk.public_bytes();
+    let public = {
+        let mut array = [0; 32];
+        array.copy_from_slice(public);
+        array
+    };
+    trace!("genned keypair with public={:x?}", public);
     app.set_keys(&[&sk]);
 
     let (t, vrf) = get_vrf();
@@ -226,8 +231,9 @@ fn verify_vrf_sign() {
 
     let sig = sk.vrf_sign(&mut rand::thread_rng(), data.clone());
 
-    let mut input = KEY_TYPE.serialize().unwrap();
-    input.append(&mut (&sk.public_bytes()).serialize().unwrap());
+    let mut input = [0; 4 + 32].to_vec();
+    KEY_TYPE.serialize_fixed(&mut input[..4]).unwrap();
+    public.serialize_fixed(&mut input[4..]).unwrap();
     input.extend_from_slice(serialized_vrf.as_slice());
     trace!("input = {:x?}", input);
 
@@ -239,9 +245,7 @@ fn verify_vrf_sign() {
     let signature =
         VRFSignature::deserialize_owned(&output).expect("can't deserialize VRFSignature");
 
-    let vrf_verify = sk
-        .to_public_key()
-        .vrf_verify(&mut rand::thread_rng(), data, &output);
+    let vrf_verify = sk.to_public_key().vrf_verify(data, &output);
 
     assert!(vrf_verify);
 }

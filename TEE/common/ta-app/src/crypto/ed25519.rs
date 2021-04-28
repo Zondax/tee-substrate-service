@@ -9,12 +9,7 @@ impl Clone for Keypair {
         let secret = self.0.secret.as_bytes();
         let secret = SecretKey::from_bytes(&secret[..]).unwrap();
 
-        let keypair = ed25519_dalek::Keypair {
-            public: (&secret).into(),
-            secret,
-        };
-
-        Self(keypair)
+        secret.into()
     }
 }
 
@@ -26,12 +21,13 @@ impl Keypair {
         //not gonna error since length is ok
         let secret = SecretKey::from_bytes(&seed).unwrap();
 
-        let keypair = ed25519_dalek::Keypair {
-            public: (&secret).into(),
-            secret,
-        };
+        secret.into()
+    }
 
-        Self(keypair)
+    pub fn from_bytes(bytes: &[u8]) -> Option<Self> {
+        let secret = SecretKey::from_bytes(bytes).ok()?;
+
+        Some(secret.into())
     }
 
     pub fn public(&self) -> &[u8] {
@@ -63,5 +59,14 @@ impl PublicKey {
 impl From<&Keypair> for PublicKey {
     fn from(pair: &Keypair) -> Self {
         Self(pair.0.public)
+    }
+}
+
+impl From<SecretKey> for Keypair {
+    fn from(secret: SecretKey) -> Self {
+        Self(ed25519_dalek::Keypair {
+            public: (&secret).into(),
+            secret,
+        })
     }
 }
