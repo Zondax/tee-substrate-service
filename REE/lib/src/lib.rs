@@ -3,6 +3,7 @@
 //! It starts the chosen service (dependency and code) and feeds it to the logic in `host_app`, aswell as the
 //! default handler for the requests
 
+#![feature(extend_key_value_attributes)]
 #![no_builtins]
 
 #[macro_use]
