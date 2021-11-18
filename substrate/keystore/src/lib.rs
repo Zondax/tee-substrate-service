@@ -5,6 +5,7 @@ use sp_core::{
 };
 use sp_keystore::Error;
 use tokio::runtime::Handle;
+use url::Url;
 use zkms_ductile::{RemoteKeystore, RemoteKeystoreResponse};
 
 #[macro_use]
@@ -21,7 +22,7 @@ struct ZKMSClient {
 pub struct TEEKeystore {
     client: RwLock<Option<ZKMSClient>>,
 
-    url: url::Url,
+    url: Url,
 
     /// Handle to the tokio runtime
     runtime: Handle,
@@ -37,7 +38,9 @@ impl TEEKeystore {
     pub fn connect(&self) -> ductile::Result<()> {
         if self.client.read().as_ref().is_none() {
             debug!("creating new connection to TEE keystore");
-            let (tx, rx) = ductile::connect_channel(self.url.to_string().as_str())?;
+            let host = self.url.host_str().expect("Invalid ip address");
+            let port = self.url.port().expect("Invalid valid port");
+            let (tx, rx) = ductile::connect_channel(format!("{}:{}", host, port))?;
 
             let handle = ZKMSClient { tx, rx };
             self.client.write().replace(handle);
@@ -49,9 +52,15 @@ impl TEEKeystore {
 
     #[instrument]
     pub fn deferred(url: &str) -> Result<Self, String> {
-        let url = url
+        let url: Url = url
             .parse()
             .map_err(|e| format!("cannot parse url: {:?}", e))?;
+        if url.scheme() != "tcp" {
+            return Err(format!(
+                "Invalid scheme {} - only tcp is supported",
+                url.scheme()
+            ));
+        }
 
         debug!("retrieving tokio runtime handle");
         let runtime = Handle::current();
