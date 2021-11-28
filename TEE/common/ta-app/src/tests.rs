@@ -67,7 +67,7 @@ fn sign_something(algo: CryptoAlgo) {
     trace!("genned keypair with public={:x?}", sk.public_bytes());
     app.set_keys(&[&sk]);
 
-    let msg = &b"francesco@zondax.ch"[..];
+    let msg = &b"support@zondax.ch"[..];
 
     let mut input = algo.serialize().unwrap();
     input.append(&mut KEY_TYPE.serialize().unwrap());

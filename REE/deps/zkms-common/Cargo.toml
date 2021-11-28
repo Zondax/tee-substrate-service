@@ -1,6 +1,6 @@
 [package]
 name = "zkms-common"
-authors = ["Zondax GmbH <info@zondax.ch>"]
+authors = ["Zondax GmbH <support@zondax.ch>"]
 description = "Common definitions for zkms-client and zkms-server"
 edition = "2018"
 license = "Apache-2.0"

@@ -36,7 +36,7 @@ pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
                 .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
 
-            const MSG: &[u8] = "francesco@zondax.ch".as_bytes();
+            const MSG: &[u8] = "support@zondax.ch".as_bytes();
 
             let sign = client
                 .sign_with(CryptoAlgo::Sr25519, key.to_vec(), MSG)
