@@ -1,13 +1,12 @@
 [package]
 name = "zkms-jsonrpc"
 version = "0.1.0"
-authors = ["becominginsane <francesco@zondax.ch>"]
+authors = ["Zondax GmbH <support@zondax.ch>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [features]
 client = ["jsonrpc-core-client"]
-
 
 [dependencies]
 zkms-common = { version = "0.1", path = "../../zkms-common", features = ["serde_"] }

@@ -8,33 +8,8 @@ use std::prelude::v1::*;
 mod tee_error;
 pub use tee_error::{TeeError, TeeErrorCode};
 
-#[derive(Debug, Copy, Clone)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[repr(u32)]
-pub enum CommandId {
-    GenerateNew,
-    GetKeys,
-    SignMessage,
-}
-
-impl std::convert::TryFrom<u32> for CommandId {
-    type Error = ();
-
-    fn try_from(cmd: u32) -> Result<Self, ()> {
-        match cmd {
-            0 => Ok(CommandId::GenerateNew),
-            1 => Ok(CommandId::GetKeys),
-            2 => Ok(CommandId::SignMessage),
-            _ => Err(()),
-        }
-    }
-}
-
-impl Into<u32> for CommandId {
-    fn into(self) -> u32 {
-        self as _
-    }
-}
+mod types;
+pub use types::*;
 
 // TODO trait should be more generic. We might have different type of parameters or None at all.
 pub trait HandleTaCommand {
@@ -46,5 +21,5 @@ pub trait HandleTaCommand {
     ) -> Result<(), TeeErrorCode>;
 }
 
-mod serde;
+pub mod serde;
 pub use serde::*;

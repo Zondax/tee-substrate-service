@@ -1,5 +1,5 @@
 [package]
-name = "ta-common"
+name = "zkms-ductile"
 version = "0.1.0"
 authors = ["Zondax GmbH <support@zondax.ch>"]
 edition = "2018"
@@ -7,4 +7,8 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["alloc"] }
+sp-core = "3.0.0"
+sp-keystore = { version = "0.9.0", features = ["serde"] }
+
+tracing = "0.1"
+serde = "1"

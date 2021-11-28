@@ -1,76 +1,150 @@
 use futures::future::Future;
-
 use futures::future::TryFutureExt;
-use jsonrpc_core_client::transports::http::connect;
-use schnorrkel::{PublicKey, Signature};
-use zkms_jsonrpc::ZKMSClient;
+
+mod client;
+use client::Client;
+
+use zkms_common::CryptoAlgo;
+use zkms_ductile::{
+    crypto::{self, Pair as _},
+    ecdsa, ed25519, sr25519,
+};
 
 pub async fn execute_tests(addr: impl std::net::ToSocketAddrs) {
     info!("Connecting testing client...");
-    let client = get_client(
-        addr.to_socket_addrs()
-            .expect("unable to construct address list")
-            .next()
-            .expect("no valid address provided"),
-    )
-    .await;
+    let client = Client::connect(addr).expect("server not running!");
 
     info!("TESTS STARTING");
 
     Test::new(
         "generateNew 00",
-        "generate new keypair and return a public key; no seed",
-        async {
-            let key = client
-                .generate_new(None)
-                .await
+        "generate new sr25519 keypair and return a public key; no seed",
+        || {
+            client
+                .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
-            PublicKey::from_bytes(&key[..])
-                .map_err(|e| format!("public key was not valid: {:?}", e))?; //verify that key is valid
             Ok::<_, String>(())
         },
     )
-    .exec_fut()
-    .await;
+    .exec();
 
     Test::new(
         "signMessage 00",
-        "sign a message and verify signature",
-        async {
+        "sign a message with sr25519 and verify signature",
+        || {
             let key = client
-                .generate_new(None)
-                .await
+                .sr25519_generate_new()
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
-            let public_key = PublicKey::from_bytes(&key[..])
-                .map_err(|e| format!("public key was not valid: {:?}", e))?; //verify that key is valid
 
-            const MSG: &[u8] = "francesco@zondax.ch".as_bytes();
+            const MSG: &[u8] = "support@zondax.ch".as_bytes();
 
             let sign = client
-                .sign_message(key, MSG.to_vec())
-                .await
+                .sign_with(CryptoAlgo::Sr25519, key.to_vec(), MSG)
                 .map_err(|e| format!("failed to issue request: {:?}", e))?;
 
-            let sign = Signature::from_bytes(&sign[..])
-                .map_err(|e| format!("signature could not be deserialized: {:?}", e))?;
+            let sign = sr25519::Signature::from_slice(&sign[..]);
 
-            public_key
-                .verify_simple(b"zondax", MSG, &sign)
-                .map_err(|e| format!("signature was not valid: {:?}", e))
+            if sr25519::Pair::verify(&sign, MSG, &key) {
+                Ok(())
+            } else {
+                Err("Signature was not valid".to_string())
+            }
         },
     )
-    .exec_fut()
-    .await;
+    .exec();
+
+    Test::new(
+        "getPublicKeys 00",
+        "attempt to retrieve sr25519 public keys",
+        || {
+            let keys = client.sr25519_public_keys();
+
+            debug!("sr25519 keys={:x?}", keys);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
+
+    Test::new(
+        "getPublicKeys 01",
+        "attempt to retrieve sr25519 public keys, min 1",
+        || {
+            let _ = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("unable to make request: {:?}", e))?;
+
+            let keys = client.sr25519_public_keys();
+
+            debug!("sr25519 keys={:x?}", keys);
+
+            if keys.len() < 1 {
+                Err("at least 1 key should be present".to_string())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .exec();
+
+    Test::new(
+        "hasKeys 00",
+        "attempt to check presence of non existing keys",
+        || {
+            let query = vec![vec![0; 32]];
+
+            let search = client.has_keys(query.clone());
+
+            debug!("haskeys; query={:x?}, search={}", query, search);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
+
+    Test::new(
+        "hasKeys 01",
+        "attempt to check presence of freshly generated key",
+        || {
+            let pk = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("failed to issue request: {:?}", e))?;
+
+            let query = vec![pk.0.to_vec()];
+
+            let search = client.has_keys(query.clone());
+
+            debug!("haskeys; query={:x?}, search={}", query, search);
+
+            if !search {
+                Err("search not ok".to_string())
+            } else {
+                Ok(())
+            }
+        },
+    )
+    .exec();
+
+    Test::new(
+        "vrfSign 00",
+        "attempt to sign vrf with freshly generated key",
+        || {
+            let pk = client
+                .sr25519_generate_new()
+                .map_err(|e| format!("failed to issue request: {:?}", e))?;
+
+            let vrf = client
+                .sr25519_vrf_sign(&pk)
+                .map_err(|e| format!("failed to issue reqiest: {:?}", e))?;
+
+            debug!("vrf={:x?}", vrf);
+
+            Ok::<_, String>(())
+        },
+    )
+    .exec();
 
     info!("TESTS FINISHED");
-}
-
-async fn get_client(addr: std::net::SocketAddr) -> ZKMSClient {
-    let addr = format!("http://{}", addr);
-
-    connect::<ZKMSClient>(&addr)
-        .await
-        .expect("unable to connect to jsonrpc server")
 }
 
 struct Test<'s, F> {
@@ -134,7 +208,7 @@ where
 
         info!("[REMOTEE TEST {}]: START", name);
         debug!("[REMOTEE TEST {}]: {}", name, description);
-        let result = (logic)();
+        let result = tokio::task::block_in_place(|| (logic)());
         match result {
             Ok(_) => {
                 info!("[REMOTEE TEST {}]: SUCCESS", name);

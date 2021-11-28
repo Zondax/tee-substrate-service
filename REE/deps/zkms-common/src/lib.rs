@@ -12,6 +12,4 @@
 )]
 
 pub mod protocol;
-pub use protocol::{HandleRequest, RequestError, RequestMethod, RequestResponse};
-
-pub use schnorrkel;
+pub use protocol::{HandleRequest, RequestError, CryptoAlgo, HasKeysPair, RequestMethod, RequestResponse};

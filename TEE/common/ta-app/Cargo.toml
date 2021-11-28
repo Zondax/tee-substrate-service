@@ -1,28 +1,37 @@
 [package]
 name = "ta-app"
 version = "0.1.0"
-authors = ["becominginsane <francesco@zondax.ch>"]
+authors = ["Zondax GmbH <support@zondax.ch>"]
 edition = "2018"
 
 [features]
 std = ["rand", "rand_core/std", "no-std-compat/std"]
 
 [dependencies]
-optee-common = { version = "0.1.0", path = "../../../common/optee-common" }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["alloc"] }
 log = "0.4"
 rand_core = "0.6"
 no-std-compat = { version = "0.4.1", features = ["alloc"] }
 rand = { version = "0.8", optional = true }
 
 #crypto
+##sr25519, vrf
 schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 merlin = { version = "3", default-features = false }
+##ecdsa
+k256 = { version = "0.7.3", features = ["ecdsa"], default-features = false }
+blake2 = { version = "0.9.1", default-features = false }
+##ed25519
+ed25519-dalek = { version = "1", features = ["u64_backend", "alloc"], default-features = false }
 
 #misc
 hex = { version = "0.4", default-features = false, features = ["alloc"] }
+hashbrown = { version = "0.11", default-features = false, features = ["inline-more"] }
 
 [dev-dependencies]
 rand_core = { version = "0.6", features = ["std"] }
 rand = "0.8"
-optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["alloc"] }
+optee-common = { version = "0.1.0", path = "../../../common/optee-common", features = ["sp"] }
 no-std-compat = { version = "0.4.1", features = ["std", "alloc"] }
+env_logger = { version = "0.8" }
+sp-keystore = { version = "0.9", default-features = false }

@@ -1,0 +1,7 @@
+[workspace]
+members = ["keystore"]
+
+[patch.crates-io]
+sp-core = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+sp-keystore = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+sc-keystore = { git = "https://github.com/Zondax/substrate.git", branch = "teekeystore"  }

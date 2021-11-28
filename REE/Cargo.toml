@@ -1,7 +1,17 @@
  [workspace]
  members = ["lib", "common/host-app",
             "deps/host-common", "deps/zkms-common",
-            "deps/jsonrpc/host", "deps/jsonrpc/zkms"
+            #"deps/jsonrpc/host", "deps/jsonrpc/zkms",
+            "deps/ductile/host", "deps/ductile/zkms"
             ]
- 
+
+exclude = [
+            "deps/jsonrpc/host", "deps/jsonrpc/zkms",
+            ]
+
  resolver = "2"
+
+[patch.crates-io]
+sp-core = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+sp-keystore = { git = "https://github.com/Zondax/substrate", branch = "teekeystore" }
+ductile = { git = "https://github.com/Zondax/ductile" }

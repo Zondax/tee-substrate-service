@@ -46,6 +46,39 @@ pub fn advance_slice(slice: &mut &[u8], amt: usize) -> Result<(), Error> {
     }
 }
 
+pub mod hasher {
+    use core::hash::{BuildHasher, Hasher};
+
+    #[derive(Default)]
+    pub struct Builder;
+
+    ///This hasher is not cryptographically secure or resistant to collisions
+    /// the key for this hasher is only every supposed to be an [u8; 4]
+    pub struct MyHasher(u32);
+
+    impl BuildHasher for Builder {
+        type Hasher = MyHasher;
+
+        fn build_hasher(&self) -> Self::Hasher {
+            MyHasher(0)
+        }
+    }
+
+    impl Hasher for MyHasher {
+        fn finish(&self) -> u64 {
+            self.0 as u64
+        }
+
+        fn write(&mut self, bytes: &[u8]) {
+            let mut inner = [0; 4];
+            for (i, b) in bytes.iter().take(4).enumerate() {
+                inner[i] = *b;
+            }
+            self.0 = u32::from_le_bytes(inner);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -66,42 +99,5 @@ mod tests {
         let read = read_and_advance(&mut &input[..], 42).expect("shouldn't error");
 
         assert_eq!(&read[..], &input[..])
-    }
-}
-
-pub mod sign {
-    use super::*;
-    use merlin::Transcript;
-    use schnorrkel::{context::SigningTranscriptWithRng, PublicKey, SecretKey, Signature};
-
-    /// Creates a `Transcript` with the given CSPRNG
-    ///
-    /// This transcript construction matches otherwise `schnorrkel`'s
-    /// `SigningContext`
-    pub fn get_transcript<R: CryptoRng + RngCore>(
-        rng: R,
-        ctx: &[u8],
-        msg: &[u8],
-    ) -> SigningTranscriptWithRng<Transcript, R> {
-        //must match `schnorrkel`'s to allow easy verification
-        //SigningContext::new
-        let mut t = Transcript::new(b"SigningContext");
-        t.append_message(b"", ctx);
-        //SigningContext::bytes
-        t.append_message(b"sign-bytes", msg);
-
-        schnorrkel::context::attach_rng(t, rng)
-    }
-
-    pub fn sign_with_rng<R: CryptoRng + RngCore>(
-        rng: R,
-        sk: &SecretKey,
-        ctx: &[u8],
-        msg: &[u8],
-        pk: &PublicKey,
-    ) -> Signature {
-        let t = get_transcript(rng, ctx, msg);
-
-        sk.sign(t, pk)
     }
 }
