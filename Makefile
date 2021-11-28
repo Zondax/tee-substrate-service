@@ -36,3 +36,10 @@ run: copy
 
 run-debug: copy
 	$(MAKE) -C framework $@
+
+fuzz_dep:
+	cargo install cargo-fuzz --force
+
+fuzz:
+	cd TEE/common/ta-app && cargo fuzz list |\
+	xargs -n1 -P $(shell nproc) cargo fuzz run

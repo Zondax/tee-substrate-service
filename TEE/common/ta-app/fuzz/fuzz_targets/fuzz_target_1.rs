@@ -13,13 +13,12 @@ use optee_common::{CommandId, HandleTaCommand};
 struct Command {
     cmd: CommandId,
     input: Vec<u8>,
-    output_len: usize,
 }
 
 fuzz_target!(|data: Command| {
     // fuzzed code goes here
     let mut app = TaApp::default();
 
-    let mut out = vec![0; data.output_len];
+    let mut out = vec![0; 100 * 1024];
     let _ = app.process_command(data.cmd, data.input.as_slice(), &mut out);
 });
