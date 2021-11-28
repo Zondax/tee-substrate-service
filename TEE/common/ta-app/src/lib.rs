@@ -6,20 +6,24 @@ use std::prelude::v1::*;
 use std::cell::{Ref, RefCell, RefMut};
 
 use optee_common::{
-    CommandId, Deserialize, DeserializeOwned, HandleTaCommand, SerializeFixed,
-    TeeErrorCode as Error,
+    CommandId, CryptoAlgo, Deserialize, DeserializeOwned, DeserializeVariable, HandleTaCommand,
+    HasKeysPair, Serialize, SerializeFixed, TeeErrorCode as Error,
 };
 use rand_core::{CryptoRng, RngCore};
-use schnorrkel::{keys::Keypair, PublicKey, SecretKey, Signature};
+
+use hashbrown::HashMap;
 
 mod util;
 use util::CSPRNG;
+
+mod crypto;
+use crypto::Keypair;
 
 #[macro_use]
 extern crate log;
 
 pub struct TaApp<'r> {
-    keys: Vec<Keypair>,
+    keys: HashMap<[u8; 4], Vec<Keypair>, util::hasher::Builder>,
     rng: &'r mut dyn CSPRNG, //the rng provider
 }
 
@@ -47,103 +51,174 @@ impl<'r> HandleTaCommand for TaApp<'r> {
     ) -> Result<(), Error> {
         trace!("Processing CMD {:?}", cmd_id);
 
-        Self::check_mem(cmd_id, input, &output)?;
-        trace!("checked mem succesfully...");
-
         match cmd_id {
             CommandId::GenerateNew => {
-                let seed: &str = Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
-                trace!("read seed_len={:?}", seed.len());
+                let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
+                trace!("GenerateNew: read algo: {:?}", algo);
 
-                match seed.len() {
-                    0 => {
-                        let keypair = Keypair::generate_with(&mut self.rng);
-                        trace!("generated keypair; public={:x?}", keypair.public.to_bytes());
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                trace!("GenerateNew: read key_type: {:x?}", key_type);
 
-                        //write to output
-                        keypair.public.serialize_fixed(output).unwrap();
+                //generate keypair
+                let keypair = Keypair::generate_new(&mut self.rng, algo);
 
-                        //store keypair
-                        self.keys.push(keypair);
-                    }
-                    len => {
-                        todo!("private key with seed")
-                    }
+                let public = keypair.public_bytes();
+                trace!("generated keypair");
+
+                //copy into output
+                if public.len() > output.len() {
+                    return Err(Error::OutOfMemory);
                 }
+                output[..public.len()].copy_from_slice(public);
+                trace!("written public key");
+
+                //insert into own store
+                self.keys.entry(key_type).or_default().push(keypair);
+                trace!("inserted keypair into own store");
 
                 Ok(())
             }
             CommandId::GetKeys => {
-                trace!("number of keys: {:?}", self.keys.len());
-
-                for (i, key) in self.keys.iter().enumerate() {
-                    let bytes = key.public.to_bytes();
-                    let hex = hex::encode(&bytes);
-                    trace!("key {}: {}", i, hex);
+                //check space for n of keys
+                if output.len() < 8 {
+                    return Err(Error::OutOfMemory);
                 }
 
-                todo!()
-            }
-            CommandId::SignMessage => {
-                let public: PublicKey =
-                    PublicKey::deserialize_owned(&input).map_err(|_| Error::BadFormat)?;
-                trace!("read public key: {:x?}", public.to_bytes());
+                let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
+                trace!("read algo: {:?}", algo);
 
-                util::advance_slice(&mut input, PublicKey::len()).unwrap();
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                trace!("read key_type: {:x?}", key_type);
 
-                let msg: &[u8] = Deserialize::deserialize(&input).unwrap();
-                trace!("read msg: {:x?}", msg);
+                //search for key_type associated keypairs of the given curve
+                let keys: Vec<Vec<u8>> = self
+                    .keys
+                    .entry(key_type)
+                    .or_default()
+                    .iter()
+                    .filter(|keypair| keypair == &&algo)
+                    .map(|keypair| keypair.public_bytes().to_vec()) //get the public part of the key
+                    .collect();
+                trace!("got keys");
 
-                let secret = self
-                    .find_associated_key(public)
-                    .ok_or(Error::BadParameters)?;
-                trace!("got key");
+                let keys = keys.serialize().unwrap();
 
-                let sig = self.sign(&secret, b"zondax", &msg, &public);
-                trace!("signed!");
+                trace!("keys serialized");
+                if output.len() < keys.len() {
+                    return Err(Error::OutOfMemory);
+                }
 
-                sig.serialize_fixed(output).unwrap();
-                trace!("signature copied to out");
+                output[..keys.len()].copy_from_slice(&keys);
+                trace!("keys written");
 
                 Ok(())
             }
-        }
-    }
-}
-
-impl<'r> TaApp<'r> {
-    ///Makes sure the input and output slice have enough length
-    fn check_mem(cmd: CommandId, mut input: &[u8], mut out: &[u8]) -> Result<(), Error> {
-        match cmd {
-            CommandId::GenerateNew => {
-                let len = util::read_and_advance_u64(&mut input)?;
-
-                let input = input.len() >= len as _;
-                let out = out.len() >= PublicKey::len();
-
-                if input && out {
-                    Ok(())
-                } else {
-                    Err(Error::OutOfMemory)
-                }
-            }
-            CommandId::GetKeys => Ok(()),
             CommandId::SignMessage => {
-                //we can skip the public key here
+                let algo = CryptoAlgo::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, CryptoAlgo::len()).unwrap();
+                trace!("SignMessage: read algo: {:?}", algo);
 
-                //attempt to read public_key, error if failed
-                let _ = util::read_and_advance(&mut input, PublicKey::len())?;
-
-                let len = util::read_and_advance_u64(&mut input)?;
-                let input = input.len() >= len as _; //check msg len
-
-                let out = out.len() >= Signature::len();
-
-                if input && out {
-                    Ok(())
-                } else {
-                    Err(Error::OutOfMemory)
+                //no need to keep going if the output buffer is already too small
+                if algo.signature_len() > output.len() {
+                    return Err(Error::OutOfMemory)?;
                 }
+
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                trace!("SignMessage: read key_type: {:x?}", key_type);
+                util::advance_slice(&mut input, 4).unwrap();
+
+                let public: &[u8] =
+                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 8 + public.len()).unwrap();
+                trace!("read public key");
+
+                let msg: &[u8] = Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                trace!("read msg");
+
+                let pair = self
+                    .find_associated_key(&key_type, public)
+                    .ok_or(Error::BadParameters)?;
+                trace!("got keypair");
+
+                let sig = pair.sign(&mut self.rng, &msg);
+                trace!("signed!");
+
+                if sig.len() > output.len() {
+                    //double check even if we checked at the start
+                    return Err(Error::OutOfMemory);
+                }
+                output[..sig.len()].copy_from_slice(&sig);
+                trace!("signature written");
+
+                Ok(())
+            }
+            CommandId::HasKeys => {
+                //check if we have 1 byte available for the bool output
+                if output.len() < 1 {
+                    return Err(Error::OutOfMemory);
+                }
+
+                let (_, pairs): (_, Vec<HasKeysPair>) =
+                    DeserializeVariable::deserialize_variable(input)
+                        .map_err(|_| Error::BadFormat)?;
+                trace!("read HasKeysPair");
+
+                let search = pairs.into_iter().all(
+                    |HasKeysPair {
+                         key_type,
+                         public_key,
+                     }| {
+                        self.find_associated_key(&key_type, public_key.as_slice())
+                            .is_some()
+                    },
+                );
+                trace!("searched all keys; search={}", search);
+
+                if search {
+                    output[0] = 1;
+                } else {
+                    output[0] = 0;
+                }
+
+                Ok(())
+            }
+            CommandId::VrfSign => {
+                let key_type: [u8; 4] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 4).unwrap();
+                trace!("read key_type: {:x?}", key_type);
+
+                let public: [u8; 32] =
+                    DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
+                util::advance_slice(&mut input, 32).unwrap();
+                trace!("got public key");
+
+                let pair = self
+                    .find_associated_key(&key_type, &public)
+                    .ok_or(Error::BadParameters)?;
+                trace!("found keypair");
+
+                let data: crypto::VRFData =
+                    Deserialize::deserialize(input).map_err(|_| Error::BadFormat)?;
+                trace!("got vrf data");
+
+                let vrf = pair
+                    .vrf_sign(&mut self.rng, data)
+                    .map_err(|_| Error::BadParameters)?;
+                trace!("signed vrf");
+
+                if vrf.len() > output.len() {
+                    return Err(Error::OutOfMemory);
+                }
+                output[..vrf.len()].copy_from_slice(&vrf);
+                trace!("written vrf");
+
+                Ok(())
             }
         }
     }
@@ -153,24 +228,15 @@ impl<'r> TaApp<'r> {
     pub fn with_rng<R: CryptoRng + RngCore + 'r>(rng: &'r mut R) -> Self {
         Self {
             rng: rng as _,
-            keys: Default::default(),
+            keys: crypto::default_set(),
         }
     }
 
-    fn find_associated_key(&self, public_key: PublicKey) -> Option<SecretKey> {
-        let mut keys = self.keys.iter();
-        while let Some(pair) = keys.next() {
-            if pair.public == public_key {
-                return Some(pair.secret.clone()); //this is just 64 bytes
-            }
-        }
-
-        None
-    }
-
-    /// Sign a message with the given secret key (and public key)
-    fn sign(&mut self, sk: &SecretKey, ctx: &[u8], msg: &[u8], pk: &PublicKey) -> Signature {
-        util::sign::sign_with_rng(&mut self.rng, sk, ctx, msg, pk)
+    fn find_associated_key(&self, key_type: &[u8; 4], public_key: &[u8]) -> Option<Keypair> {
+        self.keys
+            .get(key_type)
+            .and_then(|keys| keys.iter().find(|k| k.public_bytes() == public_key))
+            .cloned()
     }
 }
 
@@ -197,79 +263,4 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use optee_common::Serialize;
-
-    impl Default for TaApp<'static> {
-        fn default() -> Self {
-            let rng = Box::new(rand::thread_rng());
-
-            Self {
-                rng: Box::leak(rng),
-                keys: Default::default(),
-            }
-        }
-    }
-
-    impl<'r> TaApp<'r> {
-        fn set_keys(&mut self, keypairs: &[&Keypair]) {
-            let keys: Vec<_> = keypairs.iter().map(|k| (*k).clone()).collect();
-
-            self.keys = keys;
-        }
-    }
-
-    fn keypair() -> Keypair {
-        Keypair::generate_with(&mut rand::thread_rng())
-    }
-
-    #[test]
-    fn get_random_key() {
-        let mut rng = rand_core::OsRng;
-        let mut app = TaApp::with_rng(&mut rng);
-
-        let input = "".serialize().unwrap();
-
-        let mut output = Vec::new();
-        output.resize(PublicKey::len(), 0);
-
-        app.process_command(CommandId::GenerateNew, &input[..], &mut output)
-            .expect("shouldn't fail");
-
-        let valid_pk = PublicKey::from_bytes(&output).expect("not a valid public key");
-        dbg!(valid_pk);
-    }
-
-    #[test]
-    fn sign_something() {
-        let mut rng = rand_core::OsRng;
-        let mut app = TaApp::with_rng(&mut rng);
-
-        let sk = keypair();
-        app.set_keys(&[&sk]);
-
-        let msg = &b"francesco@zondax.ch"[..];
-
-        let input = {
-            let mut vec = vec![0u8; PublicKey::len()];
-            sk.public.serialize_fixed(&mut vec).unwrap();
-            vec.append(&mut msg.serialize().unwrap());
-            vec
-        };
-
-        let mut output = vec![0u8; Signature::len()];
-
-        app.process_command(CommandId::SignMessage, &input[..], &mut output)
-            .expect("shouldn't fail");
-
-        let signature = Signature::from_bytes(&output).expect("not a valid signature key");
-        dbg!(signature);
-
-        let transcript = util::sign::get_transcript(&mut rng, b"zondax", msg);
-
-        sk.public
-            .verify(transcript, &signature)
-            .expect("signature couldn't be verified");
-    }
-}
+mod tests;

@@ -1,6 +1,6 @@
 [package]
 name = "zkms-common"
-authors = ["Zondax GmbH <info@zondax.ch>"]
+authors = ["Zondax GmbH <support@zondax.ch>"]
 description = "Common definitions for zkms-client and zkms-server"
 edition = "2018"
 license = "Apache-2.0"
@@ -8,11 +8,13 @@ readme = "README.md"
 version = "0.1.0" 
 
 [features]
-serde_ = ["serde", "schnorrkel/serde"]
+serde_ = ["serde", "sp-keystore/serde"]
 
 [dependencies]
 serde = { version = "1.0.123", features = ["derive"], optional = true }
-schnorrkel = { version = "0.10", features = ["u64_backend"], default-features = false }
 thiserror = "1"
+
+sp-core = { version = "3.0.0" }
+sp-keystore = { version = "0.9" }
 
 [build-dependencies]

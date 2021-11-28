@@ -1,0 +1,21 @@
+[package]
+name = "tee-keystore"
+version = "0.1.0"
+authors = ["Zondax GmbH <support@zondax.ch>"]
+edition = "2018"
+
+[dependencies]
+zkms-ductile = { version = "0.1", path = "../../REE/deps/ductile/zkms" }
+ductile = { version = "0.1", git = "https://github.com/Zondax/ductile" }
+
+tokio = { version = "0.2", features = ["tcp", "dns", "time", "sync"] }
+parking_lot = { version = "0.11" }
+
+url = "2.2.1"
+
+tracing = "0.1"
+
+sp-core = "3.0.0"
+sc-keystore = "3.0.0"
+sp-keystore = "0.9.0"
+async-trait = "0.1.47"

@@ -1,6 +1,7 @@
 //! This crate is for common types between `host` crates, such as
 //! `host`
 //! `host_jsonrpc`
+//! `host_ductile`
 //!
 //! It contains the definition that all services need to adhere to be valid for the host application
 
@@ -12,7 +13,7 @@ pub use futures::channel;
 use channel::oneshot::Sender;
 use futures::stream::Stream;
 
-pub use zkms_common::{self, RequestMethod, RequestResponse};
+pub use zkms_common::{self, RequestMethod, RequestResponse, CryptoAlgo, HasKeysPair};
 
 /// Type alias for the channel to send the result of the request to
 pub type ResponseSender<E> = Sender<Result<RequestResponse, E>>;

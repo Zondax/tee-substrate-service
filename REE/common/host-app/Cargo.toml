@@ -1,6 +1,6 @@
 [package]
 name = "host-app"
-authors = ["Zondax GmbH <info@zondax.ch>"]
+authors = ["Zondax GmbH <support@zondax.ch>"]
 description = "Provides useful CLI commands to manage zkms servers"
 edition = "2018"
 license = "Apache-2.0"
