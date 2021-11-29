@@ -14,7 +14,7 @@ libfuzzer-sys = "0.4"
 arbitrary = { version = "1", features = ["derive"] }
 
 ta-app = { path = "..", features = ["std"] }
-optee-common = { path = "../../../../common/optee-common", features = ["arbitrary"] }
+optee-common = { path = "../../../../common/optee-common" }
 
 # Prevent this from interfering with workspaces
 [workspace]
@@ -22,6 +22,6 @@ members = ["."]
 
 [[bin]]
 name = "raw_ta"
-path = "fuzz_targets/fuzz_target_1.rs"
+path = "fuzz_targets/raw_ta.rs"
 test = false
 doc = false

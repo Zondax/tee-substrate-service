@@ -42,4 +42,5 @@ fuzz_dep:
 
 fuzz:
 	cd TEE/common/ta-app && cargo fuzz list |\
-	xargs -n1 -P $(shell nproc) cargo fuzz run
+	xargs -I% -n1 -P$(shell nproc) cargo fuzz run % --sanitizer=none -- \
+	-detect_leaks=0 -use_value_profile=1

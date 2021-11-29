@@ -1,7 +1,6 @@
 use super::*;
 
 #[derive(Debug, Copy, Clone)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[repr(u32)]
 ///Represents command to send to the tee
 pub enum CommandId {
