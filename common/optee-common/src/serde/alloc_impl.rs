@@ -147,10 +147,14 @@ pub(crate) mod vec {
             };
 
             let mut total_size = 8;
-            let mut container = Vec::with_capacity(n_items);
+            let mut container = Vec::new();
 
             for _ in 0..n_items {
-                let (size, item) = T::deserialize_variable(&input[total_size..])?;
+                let input = input
+                    .get(total_size..)
+                    .ok_or(Self::ErrorVariable::Length(total_size))?;
+
+                let (size, item) = T::deserialize_variable(input)?;
 
                 container.push(item);
                 total_size += size;
@@ -190,7 +194,7 @@ impl DeserializeVariable for HasKeysPair {
             u64::from_le_bytes(array) as usize
         };
 
-        let total_bytes = 4 + 8 + key_len;
+        let total_bytes = key_len.checked_add(4 + 8).ok_or(())?;
         //check for key_type + len + key_len
         if input.len() < total_bytes {
             return Err(());

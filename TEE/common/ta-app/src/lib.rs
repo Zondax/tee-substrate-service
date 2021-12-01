@@ -262,5 +262,17 @@ pub fn borrow_app<'a>() -> Ref<'a, Option<impl HandleTaCommand + 'static>> {
     TA_HANDLER.0.borrow()
 }
 
+#[cfg(any(test, fuzzing))]
+impl Default for TaApp<'static> {
+    fn default() -> Self {
+        let rng = Box::new(rand::thread_rng());
+
+        Self {
+            rng: Box::leak(rng),
+            keys: crypto::default_set(),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests;

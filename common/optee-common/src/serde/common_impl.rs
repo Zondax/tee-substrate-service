@@ -23,11 +23,11 @@ impl DeserializeOwned for CryptoAlgo {
     type ErrorOwned = ();
 
     fn deserialize_owned(input: &[u8]) -> Result<Self, Self::ErrorOwned> {
-        match input[0] {
+        match input.get(0).ok_or(())? {
             0 => Ok(CryptoAlgo::Sr25519),
             1 => Ok(CryptoAlgo::Ed25519),
             2 => Ok(CryptoAlgo::Ecdsa),
-            _ => Err(())
+            _ => Err(()),
         }
     }
 }

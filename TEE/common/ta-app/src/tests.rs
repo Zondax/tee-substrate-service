@@ -5,17 +5,6 @@ use merlin::Transcript;
 use optee_common::Serialize;
 use sp_keystore::vrf::{VRFSignature, VRFTranscriptData};
 
-impl Default for TaApp<'static> {
-    fn default() -> Self {
-        let rng = Box::new(rand::thread_rng());
-
-        Self {
-            rng: Box::leak(rng),
-            keys: crypto::default_set(),
-        }
-    }
-}
-
 impl<'r> TaApp<'r> {
     fn set_keys(&mut self, keypairs: &[&Keypair]) {
         let keys: Vec<_> = keypairs.iter().map(|k| (*k).clone()).collect();

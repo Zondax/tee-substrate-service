@@ -1,0 +1,27 @@
+
+[package]
+name = "ta-app-fuzz"
+version = "0.0.0"
+authors = ["Automatically generated"]
+publish = false
+edition = "2018"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+arbitrary = { version = "1", features = ["derive"] }
+
+ta-app = { path = "..", features = ["std"] }
+optee-common = { path = "../../../../common/optee-common" }
+
+# Prevent this from interfering with workspaces
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "raw_ta"
+path = "fuzz_targets/raw_ta.rs"
+test = false
+doc = false
