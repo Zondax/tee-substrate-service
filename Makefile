@@ -1,4 +1,4 @@
-.PHONY: all clean copy cclean run run-debug deps
+.PHONY: all clean copy cclean run run-debug deps fuzz_dep fuzz afl_fuzz_dep afl_fuzz unit_tests
 default: all
 
 ifdef QEMU_V8
@@ -57,3 +57,6 @@ afl_fuzz:
 	cd TEE/common/ta-app/afl-fuzz && cargo afl build &&\
 	AFL_I_DONT_CARE_ABOUT_MISSING_CRASHES=1	cargo afl fuzz \
 	-D -o /tmp/afl_fuzz_tmp -i ../fuzz/corpus/raw_ta target/debug/afl-fuzz
+
+unit_tests:
+	cd TEE/common/ta-app && cargo test
