@@ -72,7 +72,7 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                     return Err(Error::OutOfMemory);
                 }
                 output[..public.len()].copy_from_slice(public);
-                trace!("written public key");
+                trace!("written public key = {:x?}", &public[..]);
 
                 //insert into own store
                 self.keys.entry(key_type).or_default().push(keypair);
@@ -196,7 +196,11 @@ impl<'r> HandleTaCommand for TaApp<'r> {
                 let public: [u8; 32] =
                     DeserializeOwned::deserialize_owned(input).map_err(|_| Error::BadFormat)?;
                 util::advance_slice(&mut input, 32).unwrap();
-                trace!("got public key");
+                trace!("got public key = {:x?}", &public[..]);
+
+                self.iter_all_pkeys().for_each(|(key_type, pkey)| {
+                    trace!("{:?} => {:x?}", key_type, pkey)
+                });
 
                 let pair = self
                     .find_associated_key(&key_type, &public)
@@ -237,6 +241,19 @@ impl<'r> TaApp<'r> {
             .get(key_type)
             .and_then(|keys| keys.iter().find(|k| k.public_bytes() == public_key))
             .cloned()
+    }
+
+    fn iter_all_pkeys(&self) -> impl Iterator<Item = ([u8; 4], crypto::PublicKey)> + '_ {
+        self.keys
+            .iter()
+            //iterate the hashmap and get (KEY_TYPE, Vec<Keypair>)
+            .map(|(key_type, keys)| {
+                //iter thru all the keypairs
+                keys.iter()
+                    //convert keypair to pubkey and associate KEY_TYPE
+                    .map(move |key| (*key_type, key.to_public_key()))
+            })
+            .flatten()
     }
 }
 
