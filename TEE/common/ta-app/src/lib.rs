@@ -243,7 +243,7 @@ impl<'r> TaApp<'r> {
             .cloned()
     }
 
-    fn iter_all_pkeys(&self) -> impl Iterator<Item = ([u8; 4], crypto::PublicKey)> + '_ {
+    fn iter_all_pkeys<'s>(&'s self) -> impl Iterator<Item = ([u8; 4], &'s [u8])> + '_ {
         self.keys
             .iter()
             //iterate the hashmap and get (KEY_TYPE, Vec<Keypair>)
@@ -251,7 +251,7 @@ impl<'r> TaApp<'r> {
                 //iter thru all the keypairs
                 keys.iter()
                     //convert keypair to pubkey and associate KEY_TYPE
-                    .map(move |key| (*key_type, key.to_public_key()))
+                    .map(move |key| (*key_type, key.public_bytes()))
             })
             .flatten()
     }
