@@ -2,7 +2,7 @@
 
 This project's purpose is to allow safe cryptographic key storage and use for on-cloud blockchain nodes.
 
-It uses the [OPTEE Framework](https://github.com/Zondax/tee-base).
+It uses the [RuZTEE Framework](https://github.com/Zondax/tee-base).
 
 
 ## How to use
