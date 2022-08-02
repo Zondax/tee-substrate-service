@@ -14,8 +14,8 @@ env:
 
 jobs:
     build:
-        # Run this workflow in our optee self-hosted runner
-        runs-on: tee-ci
+        # Run this workflow in the optee official container 
+        container: jforissier/optee_os_ci
 
         steps:
             - uses: actions/checkout@v2
@@ -24,8 +24,13 @@ jobs:
                   token: ${{ secrets.TEE_BASE_TOKEN }}
 
             - run: |
+                  mkdir optee-qemu && cd optee-qemu
+                  repo init -u https://github.com/OP-TEE/manifest.git -m qemu_v8.xml 
+                  repo sync
+                  cd build 
+                  make toolchains -j2
                   echo "SHARED_FOLDER=$HOME/qemu-shared-folder" >> $GITHUB_ENV
-                  echo "OPTEE=$HOME/actions-runner/optee-qemuv8-3.12.0" >> $GITHUB_ENV
+                  echo "OPTEE=$HOME/actions-runner/optee-qemu" >> $GITHUB_ENV
 
             - run: mkdir -p $SHARED_FOLDER
 
@@ -34,7 +39,7 @@ jobs:
 
     test:
         needs: build
-        runs-on: tee-ci
+        container: jforissier/optee_os_ci
 
         steps:
             - uses: actions/checkout@v2
@@ -43,7 +48,7 @@ jobs:
                   token: ${{ secrets.TEE_BASE_TOKEN }}
 
             - run: |
-                  echo "OPTEE=$HOME/actions-runner/optee-qemuv8-3.12.0" >> $GITHUB_ENV
+                  echo "OPTEE=$HOME/actions-runner/optee-qemu" >> $GITHUB_ENV
                   echo "SHARED_FOLDER=$HOME/qemu-shared-folder" >> $GITHUB_ENV
                   echo "SCRIPTS=$HOME/actions-runner/scripts" >> $GITHUB_ENV
 
