@@ -1,10 +1,10 @@
 name: Build
-on:
+on: push
     # Triggers the workflow on push or pull request events but only for the master branch
-    push:
-        branches: [master nat/ci]
-    pull_request:
-        branches: [master]
+    #push:
+        #branches: [master nat/ci]
+    #pull_request:
+        #branches: [master]
 
     # So we can trigger manually
     workflow_dispatch:
@@ -15,6 +15,7 @@ env:
 jobs:
     build:
         # Run this workflow in the optee official container 
+        runs-on: ubuntu-latest
         container: jforissier/optee_os_ci
 
         steps:
@@ -25,6 +26,7 @@ jobs:
 
             - run: |
                   mkdir optee-qemu && cd optee-qemu
+                  sudo apt -y install repo
                   repo init -u https://github.com/OP-TEE/manifest.git -m qemu_v8.xml 
                   repo sync
                   cd build 
