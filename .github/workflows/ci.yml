@@ -41,6 +41,7 @@ jobs:
 
     test:
         needs: build
+        runs-on: ubuntu-latest
         container: jforissier/optee_os_ci
 
         steps:
