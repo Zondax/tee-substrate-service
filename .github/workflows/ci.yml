@@ -7,7 +7,7 @@ on: push
         #branches: [master]
 
     # So we can trigger manually
-    workflow_dispatch:
+    #workflow_dispatch:
 
 env:
     QEMU_V8: 1
